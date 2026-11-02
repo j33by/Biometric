@@ -1,0 +1,9 @@
+.dart_tool/
+.idea/
+build/
+.flutter-plugins*
+.packages
+pubspec.lock
+node_modules/
+*.log
+.env
