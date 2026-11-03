@@ -1,7 +1,7 @@
 name: cnhs_student_app
 description: CNHS Student App - students link their account to their biometric record and see attendance, logs and notices.
 publish_to: none
-version: 1.0.3
+version: 1.0.4
 
 environment:
   sdk: ^3.9.0
