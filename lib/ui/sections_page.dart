@@ -126,7 +126,7 @@ class _SectionDialogState extends State<SectionDialog> {
       content: SizedBox(
         width: 520,
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TextField(controller: _name, autofocus: true, decoration: const InputDecoration(labelText: 'Section name (e.g. Grade 10 – Rizal)')),
+          TextField(controller: _name, autofocus: true, decoration: const InputDecoration(labelText: 'Section name (STEM-1)')),
           const SizedBox(height: 16),
           const Text('Shift for each weekday  (0 = no class)', style: TextStyle(color: C.muted)),
           const SizedBox(height: 8),
