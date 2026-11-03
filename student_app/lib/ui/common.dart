@@ -167,7 +167,7 @@ class _StudentPickerState extends State<StudentPicker> {
               : Busy<List<StudentRow>>(
                   future: _f!,
                   builder: (rows) => rows.isEmpty
-                      ? const Empty(Icons.person_search, 'No match. Check the spelling, or ask your adviser to add you.')
+                      ? const Empty(Icons.person_search, 'No match. Check the spelling, or ask your admin to add you.')
                       : ListView.separated(
                           itemCount: rows.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
