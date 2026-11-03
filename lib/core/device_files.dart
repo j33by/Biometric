@@ -1,6 +1,6 @@
 // Maps the biometric device's USB files to/from app models.
 //
-//   Employee_Form.xls     (upload to device)   students, sections, shifts, rules
+//   Employee Form.xls     (upload to device)   students, sections, shifts, rules
 //   Attendance_Logs.txt   (download from device) raw punches
 //
 // Layout facts were taken from a real export of this device family:

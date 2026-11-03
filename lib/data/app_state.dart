@@ -22,7 +22,10 @@ import 'api_client.dart';
 import 'persist.dart';
 
 const List<String> kLogFileNames = ['Attendance_Logs.txt', 'Attendance Logs.txt'];
-const List<String> kFormFileNames = ['Employee_Form.xls', 'Employee Form.xls'];
+// The device's own file is "Employee Form.xls" (with a SPACE). It must be the
+// first entry: that is the name the app writes, so the device accepts the upload.
+// The underscore spelling is only recognised as a legacy name and migrated.
+const List<String> kFormFileNames = ['Employee Form.xls', 'Employee_Form.xls'];
 
 class ActivityEntry {
   final DateTime time;
@@ -170,7 +173,7 @@ class AppState extends ChangeNotifier {
       notifyListeners();
 
       _startWatchers();
-      await syncFormFile(p.join(syncFolder, kFormFileNames.first), quiet: true);
+      await syncFormFile(await _formPathIn(syncFolder), quiet: true);
       await _scanFolderForLogs();
       if (cloudEnabled) {
         _startCloudTimer();
@@ -575,7 +578,7 @@ class AppState extends ChangeNotifier {
     if (!autoExport) return;
     _exportTimer?.cancel();
     _exportTimer = Timer(const Duration(milliseconds: 1200), () async {
-      await exportFormTo(p.join(syncFolder, kFormFileNames.first));
+      await exportFormTo(await _formPathIn(syncFolder));
       if (writeUsb) {
         for (final d in drives) {
           if (d.formPath != null) await exportFormTo(d.formPath!, quiet: true);
@@ -585,7 +588,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> exportNow() async {
-    await exportFormTo(p.join(syncFolder, kFormFileNames.first));
+    await exportFormTo(await _formPathIn(syncFolder));
     if (writeUsb) {
       for (final d in drives) {
         final target = d.formPath ?? p.join(d.root, kFormFileNames.first);
@@ -595,6 +598,23 @@ class AppState extends ChangeNotifier {
   }
 
   // ============================================================ watching
+
+  /// Path of the device form inside [dir]. Always "Employee Form.xls" (space).
+  /// A legacy "Employee_Form.xls" written by older versions is renamed to it.
+  Future<String> _formPathIn(String dir) async {
+    final wanted = p.join(dir, kFormFileNames.first);
+    if (await File(wanted).exists()) return wanted;
+    final legacy = p.join(dir, kFormFileNames[1]);
+    try {
+      if (await File(legacy).exists()) {
+        await File(legacy).rename(wanted);
+        _log('info', 'Renamed ${kFormFileNames[1]} to ${kFormFileNames.first} so the device accepts it.');
+      }
+    } catch (_) {
+      if (await File(legacy).exists()) return legacy;
+    }
+    return wanted;
+  }
 
   Future<String?> _firstExisting(String dir, List<String> names) async {
     for (final n in names) {
@@ -648,7 +668,7 @@ class AppState extends ChangeNotifier {
     _startWatchers();
     _log('info', 'Sync folder set to $path');
     _saveSoon();
-    await syncFormFile(p.join(path, kFormFileNames.first));
+    await syncFormFile(await _formPathIn(path));
     await _scanFolderForLogs();
     notifyListeners();
   }

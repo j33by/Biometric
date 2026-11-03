@@ -21,7 +21,7 @@ class _StudentsPageState extends State<StudentsPage> {
 
   Future<void> _importForm() async {
     final app = context.app;
-    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xls'], dialogTitle: 'Choose Employee_Form.xls');
+    final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xls'], dialogTitle: 'Choose Employee Form.xls');
     final path = res?.files.single.path;
     if (path == null) return;
     try {
@@ -48,7 +48,7 @@ class _StudentsPageState extends State<StudentsPage> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       PageHeader(
         title: 'Students',
-        subtitle: '${app.students.length} enrolled · changes are written to Employee_Form.xls automatically',
+        subtitle: '${app.students.length} enrolled · changes are written to Employee Form.xls automatically',
         actions: [
           if (app.canWrite) OutlinedButton.icon(onPressed: _importForm, icon: const Icon(Icons.file_open_outlined, size: 16), label: const Text('Import .xls')),
           if (app.canWrite)

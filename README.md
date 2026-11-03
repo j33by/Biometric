@@ -6,13 +6,13 @@ the exchange format.
 
 ```
  biometric device ──USB──► Attendance_Logs.txt ──► app ──► Supabase (via Render API)
- biometric device ◄──USB── Employee_Form.xls   ◄── app
+ biometric device ◄──USB── Employee Form.xls   ◄── app
 ```
 
 * **Import** – `Attendance_Logs.txt` is picked up automatically from the exchange
   folder or from a USB stick. Each punch is keyed by *student ID + date/time +
   device*, so importing the same file twice (or from two PCs) never duplicates.
-* **Export** – `Employee_Form.xls` (students, sections, shifts, rules) is rewritten
+* **Export** – `Employee Form.xls` (students, sections, shifts, rules) is rewritten
   after every change. The app edits *the device's own file* in place: formatting,
   the date formulas and sheet protection are preserved byte for byte.
 * **Dashboard** – today's attendance, 14-day trend, punches per hour, per-section
@@ -47,9 +47,9 @@ Local build: `flutter create --platforms=windows .` once, then
 ## 4. Daily use
 1. First launch → enter the Render address and sign in (or *Work offline*).
 2. Plug the USB stick that came from the device. Logs import automatically and
-   `Employee_Form.xls` is written onto the stick.
+   `Employee Form.xls` is written onto the stick.
 3. Add/edit students in **Students**; on the device upload the stick's
-   `Employee_Form.xls`, then enrol the new student's fingerprint under the shown ID.
+   `Employee Form.xls`, then enrol the new student's fingerprint under the shown ID.
 
 ## Things to know
 * **Test the first upload with a backup.** The generated `.xls` was verified with

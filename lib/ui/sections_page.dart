@@ -16,7 +16,7 @@ class SectionsPage extends StatelessWidget {
     return ListView(padding: const EdgeInsets.only(bottom: 32), children: [
       PageHeader(
         title: 'Sections & shifts',
-        subtitle: 'Written to the "Attendance Rules Form" sheet of Employee_Form.xls',
+        subtitle: 'Written to the "Attendance Rules Form" sheet of Employee Form.xls',
         actions: [
           if (app.canWrite) OutlinedButton.icon(onPressed: () => showDialog(context: context, builder: (_) => const RulesDialog()), icon: const Icon(Icons.rule, size: 16), label: const Text('Attendance rules')),
         ],
