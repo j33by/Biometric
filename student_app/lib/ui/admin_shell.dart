@@ -25,7 +25,7 @@ class _AdminShellState extends State<AdminShell> {
         onDestinationSelected: (i) => setState(() => _i = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.how_to_reg_outlined), selectedIcon: Icon(Icons.how_to_reg), label: 'Requests'),
-          NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups), label: 'Students'),
+          NavigationDestination(icon: Icon(Icons.groups_outlined), selectedIcon: Icon(Icons.groups), label: 'Teachers'),
           NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: 'Notices'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Account'),
         ],
@@ -60,7 +60,7 @@ class _RequestsTabState extends State<_RequestsTab> {
   Future<void> _unlink(Link l, bool approve) async {
     String note = '';
     if (!approve) {
-      final n = await askText(context, title: 'Keep linked', label: 'Reason (shown to the student, optional)');
+      final n = await askText(context, title: 'Keep linked', label: 'Reason (shown to the teachers, optional)');
       if (n == null) return;
       note = n.trim();
     }
@@ -74,7 +74,7 @@ class _RequestsTabState extends State<_RequestsTab> {
   }
 
   Future<void> _deny(Link l) async {
-    final note = await askText(context, title: 'Deny request', label: 'Reason (shown to the student, optional)');
+    final note = await askText(context, title: 'Deny request', label: 'Reason (shown to the teachers, optional)');
     if (note == null) return;
     await _act(l, 'denied', note: note.trim());
   }
@@ -197,7 +197,7 @@ class _EditLinkDialogState extends State<_EditLinkDialog> {
     final s = await showDialog<StudentRow>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Bind to a different student'),
+        title: const Text('Bind to a different teacher'),
         content: SizedBox(width: 420, height: 420, child: StudentPicker(search: Repo.students, loadOnStart: true, onPick: (s) => Navigator.pop(c, s))),
         actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel'))],
       ),
@@ -219,9 +219,9 @@ class _EditLinkDialogState extends State<_EditLinkDialog> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: _account, decoration: const InputDecoration(labelText: 'Name shown on the account')),
               const SizedBox(height: 12),
-              TextField(controller: _student, decoration: InputDecoration(labelText: 'Student record name (ID $_studentId)', helperText: 'Renames the biometric record itself')),
-              Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _rebind, icon: const Icon(Icons.swap_horiz), label: const Text('Bind to a different student'))),
-              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Note to the student (optional)')),
+              TextField(controller: _student, decoration: InputDecoration(labelText: 'Teachers record name (ID $_studentId)', helperText: 'Renames the biometric record itself')),
+              Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: _rebind, icon: const Icon(Icons.swap_horiz), label: const Text('Bind to a different teacher'))),
+              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Note to the teacher (optional)')),
             ]),
           ),
         ),
@@ -249,7 +249,7 @@ class _StudentsTabState extends State<_StudentsTab> {
   Key _k = UniqueKey();
 
   Future<void> _rename(StudentRow s) async {
-    final name = await askText(context, title: 'Rename student (ID ${s.id})', label: 'Name', initial: s.name);
+    final name = await askText(context, title: 'Rename teacher (ID ${s.id})', label: 'Name', initial: s.name);
     if (name == null || name.trim().isEmpty || name.trim() == s.name) return;
     try {
       await Repo.renameStudent(s.id, name);
