@@ -58,7 +58,7 @@ class _LoginPageState extends State<LoginPage> {
               const Text('Attendance\nConsole', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w300, height: 1.1)),
               const SizedBox(height: 14),
               const Text(
-                'Student attendance from the biometric device,\nkept in step with Excel, USB and the cloud.',
+                'Teachers attendance from the biometric device,\nkept in step with Excel, USB and the cloud.',
                 style: TextStyle(color: C.sideText, fontSize: 14, height: 1.5),
               ),
             ]),
