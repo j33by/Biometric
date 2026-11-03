@@ -79,7 +79,7 @@ class _AuthPageState extends State<AuthPage> {
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Icon(Icons.school, size: 64, color: cs.primary),
                 const SizedBox(height: 8),
-                Text('CNHS Student App', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text('CNHS Teacher App', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
                 Text(_signUp ? 'Create your account' : 'Sign in to see your attendance',
                     textAlign: TextAlign.center, style: TextStyle(color: cs.outline)),
                 const SizedBox(height: 24),
