@@ -76,7 +76,7 @@ class _StudentsPageState extends State<StudentsPage> {
             isExpanded: true,
             decoration: const InputDecoration(),
             items: [
-              const DropdownMenuItem(value: 0, child: Text('All sections')),
+              const DropdownMenuItem(value: 0, child: Text('All Subjects')),
               for (var i = 1; i <= 16; i++) DropdownMenuItem(value: i, child: Text(app.sectionName(i), overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (v) => setState(() => _section = v ?? 0),
@@ -98,7 +98,7 @@ class _StudentsPageState extends State<StudentsPage> {
         child: Container(
           decoration: BoxDecoration(color: C.surface, border: Border.all(color: C.border), borderRadius: BorderRadius.circular(4)),
           child: Column(children: [
-            const THead(['ID', 'Name', 'Section', 'Device role', 'TRN', 'Today', ''], [60, null, 190, 110, 130, 90, 96]),
+            const THead(['ID', 'Name', 'Subjects', 'Device role', 'TRN', 'Today', ''], [60, null, 190, 110, 130, 90, 96]),
             Expanded(
               child: list.isEmpty
                   ? const EmptyNote('No teacher match.')
@@ -247,7 +247,7 @@ class _StudentDialogState extends State<StudentDialog> {
                   initialValue: _authority,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Role on the device'),
-                  items: const [DropdownMenuItem(value: 0, child: Text('Student')), DropdownMenuItem(value: 1, child: Text('Device administrator'))],
+                  items: const [DropdownMenuItem(value: 0, child: Text('Teacher')), DropdownMenuItem(value: 1, child: Text('Device administrator'))],
                   onChanged: (v) => setState(() => _authority = v ?? 0),
                 ),
               ),
