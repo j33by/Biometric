@@ -3,8 +3,16 @@ name: Build Windows app
 on:
   push:
     branches: [main]
+    # Student-app-only commits do not rebuild the desktop app.
+    # (Path filters are not applied to tag pushes, so `v*` tags always build.)
+    paths-ignore:
+      - 'student_app/**'
+      - '.github/workflows/build-student-app.yml'
     tags: ['v*']
   pull_request:
+    paths-ignore:
+      - 'student_app/**'
+      - '.github/workflows/build-student-app.yml'
   workflow_dispatch:
 
 permissions:
@@ -35,6 +43,7 @@ jobs:
 
       - run: flutter pub get
 
+      # student_app/ is excluded in the root analysis_options.yaml
       - name: Analyze (errors fail the build)
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
