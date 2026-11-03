@@ -21,9 +21,9 @@ class _Nav {
 
 const _navs = <_Nav>[
   _Nav('Dashboard', Icons.dashboard_outlined, 'Overview'),
-  _Nav('Students', Icons.groups_outlined, 'Records'),
+  _Nav('Teachers', Icons.groups_outlined, 'Records'),
   _Nav('Attendance', Icons.fact_check_outlined),
-  _Nav('Sections & shifts', Icons.schedule_outlined, 'Setup'),
+  _Nav('Subjects & shifts', Icons.schedule_outlined, 'Setup'),
   _Nav('Device sync', Icons.usb_rounded),
   _Nav('Administrators', Icons.admin_panel_settings_outlined, 'System'),
   _Nav('Settings', Icons.tune_outlined),
