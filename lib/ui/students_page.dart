@@ -47,7 +47,7 @@ class _StudentsPageState extends State<StudentsPage> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       PageHeader(
-        title: 'Students',
+        title: 'Teachers',
         subtitle: '${app.students.length} enrolled · changes are written to Employee Form.xls automatically',
         actions: [
           if (app.canWrite) OutlinedButton.icon(onPressed: _importForm, icon: const Icon(Icons.file_open_outlined, size: 16), label: const Text('Import .xls')),
@@ -55,7 +55,7 @@ class _StudentsPageState extends State<StudentsPage> {
             FilledButton.icon(
               onPressed: () => showDialog(context: context, builder: (_) => const StudentDialog()),
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add student'),
+              label: const Text('Add teacher'),
             ),
         ],
       ),
@@ -65,7 +65,7 @@ class _StudentsPageState extends State<StudentsPage> {
           child: TextField(
             controller: _search,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 18), hintText: 'Search name, ID or LRN'),
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search, size: 18), hintText: 'Search name, ID or TRN'),
           ),
         ),
         const SizedBox(width: 10),
@@ -98,10 +98,10 @@ class _StudentsPageState extends State<StudentsPage> {
         child: Container(
           decoration: BoxDecoration(color: C.surface, border: Border.all(color: C.border), borderRadius: BorderRadius.circular(4)),
           child: Column(children: [
-            const THead(['ID', 'Name', 'Section', 'Device role', 'LRN', 'Today', ''], [60, null, 190, 110, 130, 90, 96]),
+            const THead(['ID', 'Name', 'Section', 'Device role', 'TRN', 'Today', ''], [60, null, 190, 110, 130, 90, 96]),
             Expanded(
               child: list.isEmpty
-                  ? const EmptyNote('No students match.')
+                  ? const EmptyNote('No teacher match.')
                   : ListView.builder(
                       itemCount: list.length,
                       itemBuilder: (context, i) {
@@ -116,7 +116,7 @@ class _StudentsPageState extends State<StudentsPage> {
                               tcell(Text('${s.id}', style: const TextStyle(color: C.muted, fontFeatures: [FontFeature.tabularFigures()])), 60),
                               tcell(Text(s.name.isEmpty ? '(no name)' : s.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)), null),
                               tcell(Text(app.sectionName(s.section), overflow: TextOverflow.ellipsis), 190),
-                              tcell(s.authority == 1 ? const Align(alignment: Alignment.centerLeft, child: Tag('Admin', fg: C.accent, bg: C.accentSoft)) : const Text('Student', style: TextStyle(color: C.muted)), 110),
+                              tcell(s.authority == 1 ? const Align(alignment: Alignment.centerLeft, child: Tag('Admin', fg: C.accent, bg: C.accentSoft)) : const Text('Teacher', style: TextStyle(color: C.muted)), 110),
                               tcell(Text(s.lrn.isEmpty ? '–' : s.lrn, style: const TextStyle(color: C.muted)), 130),
                               tcell(rec == null ? const Text('–', style: TextStyle(color: C.faint)) : Align(alignment: Alignment.centerLeft, child: Tag.status(rec.status)), 90),
                               tcell(
@@ -194,7 +194,7 @@ class _StudentDialogState extends State<StudentDialog> {
       return;
     }
     if (_name.text.trim().isEmpty) {
-      setState(() => _error = 'Enter the student\'s name.');
+      setState(() => _error = 'Enter the teacher\'s name.');
       return;
     }
     if (_name.text.trim().length > 24) {
@@ -220,7 +220,7 @@ class _StudentDialogState extends State<StudentDialog> {
   Widget build(BuildContext context) {
     final app = context.app;
     return AlertDialog(
-      title: Text(isNew ? 'Add student' : 'Edit student', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      title: Text(isNew ? 'Add teacher' : 'Edit teacher', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
       content: SizedBox(
         width: 460,
         child: SingleChildScrollView(
@@ -254,9 +254,9 @@ class _StudentDialogState extends State<StudentDialog> {
             ]),
             const SizedBox(height: 12),
             Row(children: [
-              Expanded(child: TextField(controller: _lrn, decoration: const InputDecoration(labelText: 'LRN (optional)'))),
+              Expanded(child: TextField(controller: _lrn, decoration: const InputDecoration(labelText: 'TRN (optional)'))),
               const SizedBox(width: 10),
-              Expanded(child: TextField(controller: _contact, decoration: const InputDecoration(labelText: 'Guardian contact (optional)'))),
+              Expanded(child: TextField(controller: _contact, decoration: const InputDecoration(labelText: 'Spouse contact (optional)'))),
             ]),
             const SizedBox(height: 12),
             TextField(controller: _notes, maxLines: 2, decoration: const InputDecoration(labelText: 'Notes (stays in this app, not sent to the device)')),
@@ -266,7 +266,7 @@ class _StudentDialogState extends State<StudentDialog> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: C.muted))),
-        FilledButton(onPressed: _save, child: Text(isNew ? 'Add student' : 'Save')),
+        FilledButton(onPressed: _save, child: Text(isNew ? 'Add teacher' : 'Save')),
       ],
     );
   }
@@ -306,7 +306,7 @@ class StudentDetail extends StatelessWidget {
         width: 560,
         height: 460,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('ID ${student.id} · ${app.sectionName(student.section)}${student.lrn.isEmpty ? '' : ' · LRN ${student.lrn}'}${student.contact.isEmpty ? '' : ' · ${student.contact}'}', style: const TextStyle(color: C.muted)),
+          Text('ID ${student.id} · ${app.sectionName(student.section)}${student.lrn.isEmpty ? '' : ' · TRN ${student.lrn}'}${student.contact.isEmpty ? '' : ' · ${student.contact}'}', style: const TextStyle(color: C.muted)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(child: Kpi(label: 'Attendance', value: total == 0 ? '–' : '${(present * 100 / total).round()}%', note: 'last 30 days')),
