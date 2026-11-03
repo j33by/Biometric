@@ -51,6 +51,7 @@ jobs:
             exit 0
           fi
           flutter create --platforms=android --project-name cnhs_student_app --org com.school .
+          rm -f test/widget_test.dart   # the template test refers to a MyApp class this app does not have
           python3 - <<'PY'
           import os, re, sys
 
