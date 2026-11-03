@@ -41,6 +41,7 @@ jobs:
 
       # If student_app/android is committed (with your own edits) it is used as is.
       # Otherwise the Android project is generated here and patched with what the app needs:
+      #   - INTERNET permission (release builds have none by default)
       #   - POST_NOTIFICATIONS permission (notifications on Android 13+)
       #   - core library desugaring (required by flutter_local_notifications)
       #   - the io.supabase.cnhs://login-callback deep link (Google sign-in / email links)
@@ -58,6 +59,12 @@ jobs:
           # ---- manifest
           p = 'android/app/src/main/AndroidManifest.xml'
           s = open(p).read()
+          # The Flutter template only grants INTERNET in debug/profile builds; a release APK needs it
+          # (without it every request fails with "Failed host lookup").
+          for perm in ('INTERNET', 'ACCESS_NETWORK_STATE'):
+              if 'android.permission.' + perm + '"' not in s:
+                  s = re.sub(r'(<manifest[^>]*>)',
+                             r'\1\n    <uses-permission android:name="android.permission.' + perm + '"/>', s, count=1)
           if 'POST_NOTIFICATIONS' not in s:
               s = re.sub(r'(<manifest[^>]*>)',
                          r'\1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>', s, count=1)
@@ -78,7 +85,7 @@ jobs:
           open(p, 'w').write(s)
           if 'flutter_deeplinking_enabled' not in s:
               sys.exit('Could not patch AndroidManifest.xml (deep linking flag)')
-          if 'POST_NOTIFICATIONS' not in s or 'login-callback' not in s:
+          if 'android.permission.INTERNET"' not in s or 'POST_NOTIFICATIONS' not in s or 'login-callback' not in s:
               sys.exit('Could not patch AndroidManifest.xml')
 
           # ---- gradle (Kotlin DSL or Groovy, depending on the Flutter version)
