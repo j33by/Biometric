@@ -1,7 +1,7 @@
 name: cnhs_student_app
 description: CNHS Student App - students link their account to their biometric record and see attendance, logs and notices.
 publish_to: none
-version: 1.0.0+1
+version: 1.0.2
 
 environment:
   sdk: ^3.9.0
@@ -19,6 +19,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ">=5.0.0 <7.0.0"
 
 flutter:
   uses-material-design: true
