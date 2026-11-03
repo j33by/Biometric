@@ -136,7 +136,7 @@ class DashboardPage extends StatelessWidget {
               title: 'By section · ${fmtDayMonth(day)}',
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
               child: bySec.isEmpty
-                  ? const EmptyNote('No sections with students')
+                  ? const EmptyNote('No sections with teachers')
                   : Column(children: [
                       for (final s in bySec)
                         Padding(
