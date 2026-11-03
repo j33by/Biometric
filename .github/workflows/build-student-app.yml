@@ -26,16 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The android/ folder holds your manifest + gradle edits (notification permission,
-      # desugaring, login deep link), so it must be committed. Generate it once locally with:
-      #   cd student_app && flutter create --platforms=android .
-      - name: Check android/ is committed
-        run: |
-          if [ ! -d android ]; then
-            echo "::error::student_app/android is missing. Run 'flutter create --platforms=android .' inside student_app, apply the README edits, and commit the android folder."
-            exit 1
-          fi
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,6 +38,61 @@ jobs:
 
       - name: Flutter version
         run: flutter --version
+
+      # If student_app/android is committed (with your own edits) it is used as is.
+      # Otherwise the Android project is generated here and patched with what the app needs:
+      #   - POST_NOTIFICATIONS permission (notifications on Android 13+)
+      #   - core library desugaring (required by flutter_local_notifications)
+      #   - the io.supabase.cnhs://login-callback deep link (Google sign-in / email links)
+      - name: Prepare Android project
+        run: |
+          if [ -d android ]; then
+            echo "Using the committed android/ folder."
+            exit 0
+          fi
+          flutter create --platforms=android --project-name cnhs_student_app --org com.school .
+          python3 - <<'PY'
+          import os, re, sys
+
+          # ---- manifest
+          p = 'android/app/src/main/AndroidManifest.xml'
+          s = open(p).read()
+          if 'POST_NOTIFICATIONS' not in s:
+              s = re.sub(r'(<manifest[^>]*>)',
+                         r'\1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>', s, count=1)
+          if 'login-callback' not in s:
+              intent = '''
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW"/>
+                      <category android:name="android.intent.category.DEFAULT"/>
+                      <category android:name="android.intent.category.BROWSABLE"/>
+                      <data android:scheme="io.supabase.cnhs" android:host="login-callback"/>
+                  </intent-filter>'''
+              s = s.replace('</activity>', intent + '\n        </activity>', 1)
+          open(p, 'w').write(s)
+          if 'POST_NOTIFICATIONS' not in s or 'login-callback' not in s:
+              sys.exit('Could not patch AndroidManifest.xml')
+
+          # ---- gradle (Kotlin DSL or Groovy, depending on the Flutter version)
+          kts, groovy = 'android/app/build.gradle.kts', 'android/app/build.gradle'
+          if os.path.exists(kts):
+              g = open(kts).read()
+              g = g.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+              g += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+              ok = 'isCoreLibraryDesugaringEnabled' in g
+              open(kts, 'w').write(g)
+          elif os.path.exists(groovy):
+              g = open(groovy).read()
+              g = g.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true', 1)
+              g += "\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
+              ok = 'coreLibraryDesugaringEnabled' in g
+              open(groovy, 'w').write(g)
+          else:
+              sys.exit('No app-level gradle file found')
+          if not ok:
+              sys.exit('Could not patch the gradle file (no compileOptions block found)')
+          print('Android project patched.')
+          PY
 
       - run: flutter pub get
 
