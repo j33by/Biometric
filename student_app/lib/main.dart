@@ -24,7 +24,7 @@ class CnhsApp extends StatelessWidget {
   const CnhsApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'CNHS Student App',
+        title: 'CNHS Teachers App',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
