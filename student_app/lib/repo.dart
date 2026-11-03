@@ -138,7 +138,7 @@ class Repo {
 
 String errText(Object e) {
   final m = e is PostgrestException ? e.message : e.toString();
-  if (m.contains('one_approved_per_student')) return 'That student record is already linked to another approved account.';
+  if (m.contains('one_approved_per_student')) return 'That teacher record is already linked to another approved account.';
   if (m.contains('student_links_user_id_key')) return 'You already have a request. Pull to refresh.';
   return m;
 }
