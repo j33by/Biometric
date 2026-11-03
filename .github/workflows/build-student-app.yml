@@ -1,0 +1,77 @@
+name: Build student app (Android)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'student_app/**'
+      - '.github/workflows/build-student-app.yml'
+    tags: ['student-v*']        # e.g. git tag student-v1.0.1 && git push origin student-v1.0.1
+  pull_request:
+    paths:
+      - 'student_app/**'
+      - '.github/workflows/build-student-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: student_app
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The android/ folder holds your manifest + gradle edits (notification permission,
+      # desugaring, login deep link), so it must be committed. Generate it once locally with:
+      #   cd student_app && flutter create --platforms=android .
+      - name: Check android/ is committed
+        run: |
+          if [ ! -d android ]; then
+            echo "::error::student_app/android is missing. Run 'flutter create --platforms=android .' inside student_app, apply the README edits, and commit the android folder."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - run: flutter pub get
+
+      - name: Analyze (errors fail the build)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # Repo secrets: Settings > Secrets and variables > Actions
+      #   SUPABASE_URL, SUPABASE_ANON_KEY   (the anon/public key only, never the service-role key)
+      - name: Build APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CNHS-Student-App-apk
+          path: student_app/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/student-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: student_app/build/app/outputs/flutter-apk/app-release.apk
