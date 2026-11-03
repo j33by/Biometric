@@ -375,9 +375,9 @@ class ProfileTab extends StatelessWidget {
         const SizedBox(height: 8),
         Center(child: Text(link.displayName, style: Theme.of(context).textTheme.titleLarge)),
         const SizedBox(height: 12),
-        ListTile(leading: const Icon(Icons.badge_outlined), title: const Text('Student record'), subtitle: Text('${link.studentName} (ID ${link.studentId})')),
+        ListTile(leading: const Icon(Icons.badge_outlined), title: const Text('Teachers record'), subtitle: Text('${link.studentName} (ID ${link.studentId})')),
         ListTile(leading: const Icon(Icons.groups_outlined), title: const Text('Section'), subtitle: SectionName(link.section)),
-        if (link.lrn.isNotEmpty) ListTile(leading: const Icon(Icons.numbers), title: const Text('LRN'), subtitle: Text(link.lrn)),
+        if (link.lrn.isNotEmpty) ListTile(leading: const Icon(Icons.numbers), title: const Text('Teacher ID'), subtitle: Text(link.lrn)),
         ListTile(leading: const Icon(Icons.email_outlined), title: const Text('Email'), subtitle: Text(link.email)),
         const Divider(),
         if (link.unlinkRequested)
