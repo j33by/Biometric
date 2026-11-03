@@ -70,7 +70,14 @@ jobs:
                       <data android:scheme="io.supabase.cnhs" android:host="login-callback"/>
                   </intent-filter>'''
               s = s.replace('</activity>', intent + '\n        </activity>', 1)
+          # Supabase (app_links) handles the sign-in link itself; Flutter's own deep-link handling
+          # must be off or the two fight over the same link and the session is never created.
+          if 'flutter_deeplinking_enabled' not in s:
+              s = re.sub(r'(<application[^>]*>)',
+                         r'\1\n        <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>', s, count=1)
           open(p, 'w').write(s)
+          if 'flutter_deeplinking_enabled' not in s:
+              sys.exit('Could not patch AndroidManifest.xml (deep linking flag)')
           if 'POST_NOTIFICATIONS' not in s or 'login-callback' not in s:
               sys.exit('Could not patch AndroidManifest.xml')
 
