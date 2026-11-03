@@ -1,4 +1,4 @@
-name: cnhs_student_app
+name: cnhs_teacher_app
 description: CNHS Teacher's App - teachers link their account to their biometric record and see attendance, logs and notices.
 publish_to: none
 version: 1.0.4
