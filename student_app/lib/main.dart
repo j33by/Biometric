@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -42,8 +44,32 @@ class _SetupNeeded extends StatelessWidget {
       );
 }
 
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  StreamSubscription<AuthState>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Without this, a failed sign-in (e.g. Google redirect that could not be exchanged for a
+    // session) is swallowed silently and the user just sees the login page again.
+    _sub = sb.auth.onAuthStateChange.listen((_) {}, onError: (Object e) {
+      if (!mounted) return;
+      toast(context, e is AuthException ? 'Sign-in failed: ${e.message}' : 'Sign-in failed: ${errText(e)}', error: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => StreamBuilder<AuthState>(
         stream: sb.auth.onAuthStateChange,
