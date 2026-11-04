@@ -68,7 +68,24 @@ It is loaded automatically on first run, or with **Faculty & shifts → Load G12
 * **Leaves** – sick, vacation, official business, training, personal, other; date ranges.
 * **Faculty & shifts** – the 16 slots (subject + weekday pattern) and the 10 shifts; attendance rules.
 * **Device sync** – USB import/export, device clock, cloud sync.
+* **Teacher accounts** – approve, deny, revoke, rebind, rename and unlink the teachers' phone-app logins
+  (see below). Needs the cloud sign-in; hidden for read-only (viewer) accounts.
+* **Notices** – announcements for the phone app, to every teacher or one faculty, optionally pinned.
+* **Phone admins** – who gets the admin screens in the phone app (superadmin only). The person signs up in the phone
+  app first, then you enter their email here; this replaces the `insert into app_admins ...` SQL step.
 * **Administrators** – cloud accounts (superadmin / admin / viewer).
+
+### Linking a teacher's phone (Teacher accounts page)
+The teacher still starts in the phone app (sign up → *Find your name* → *Send request*); the office decides on the PC.
+1. The teacher must exist under **Teachers** and the desktop must have synced to the cloud, otherwise the phone cannot find them.
+2. **Teacher accounts → Pending**: **Approve** or **Deny** (the reason is shown to the teacher).
+3. The pencil edits the account's display name, the note to the teacher, renames the teacher record itself
+   (it syncs back into `Employee Form.xls`) or **binds to a different teacher** if they picked the wrong one.
+4. **Approved** lists the linked accounts; **Revoke** removes access. **Unlink requests** answers teachers who asked to unlink.
+
+A teacher record can belong to only one approved account; the server refuses a second one. The same decisions are
+still available in the phone app's admin *Requests* tab. Making someone an admin on the phone is still the one-line SQL
+in `setup_all.sql`.
 
 ## Setup
 1. **Supabase**: SQL Editor → paste **`supabase/setup_all.sql`** → Run. That one file is everything. It works on a

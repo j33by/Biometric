@@ -36,6 +36,105 @@ class LogPage {
   LogPage(this.logs, this.cursor, this.hasMore);
 }
 
+/// A phone-app login (Supabase Auth) and the teacher record it is, or asks to be, bound to.
+class TeacherAccount {
+  final String id;
+  final String email;
+  final String accountName; // name shown for the account (admin-editable)
+  final String pickedName; // the name the teacher picked when asking
+  final String status; // pending | approved | denied
+  final String adminNote;
+  final int teacherId; // device ID of the bound record
+  final String teacherName; // current name of that record
+  final bool teacherMissing; // the record was removed from the cloud
+  final int? faculty;
+  final String teacherNo;
+  final String position;
+  final DateTime? createdAt; // real instant (UTC)
+  final bool unlinkRequested;
+  final String unlinkReason;
+
+  const TeacherAccount({
+    required this.id,
+    required this.email,
+    required this.accountName,
+    required this.pickedName,
+    required this.status,
+    required this.adminNote,
+    required this.teacherId,
+    required this.teacherName,
+    required this.teacherMissing,
+    required this.faculty,
+    required this.teacherNo,
+    required this.position,
+    required this.createdAt,
+    required this.unlinkRequested,
+    required this.unlinkReason,
+  });
+
+  factory TeacherAccount.fromJson(Map<String, dynamic> j) => TeacherAccount(
+        id: j['id'].toString(),
+        email: (j['email'] ?? '') as String,
+        accountName: (j['accountName'] ?? '') as String,
+        pickedName: (j['pickedName'] ?? '') as String,
+        status: (j['status'] ?? 'pending') as String,
+        adminNote: (j['adminNote'] ?? '') as String,
+        teacherId: (j['teacherId'] as num).toInt(),
+        teacherName: (j['teacherName'] ?? '') as String,
+        teacherMissing: (j['teacherMissing'] ?? false) as bool,
+        faculty: (j['faculty'] as num?)?.toInt(),
+        teacherNo: (j['teacherNo'] ?? '') as String,
+        position: (j['position'] ?? '') as String,
+        createdAt: DateTime.tryParse((j['createdAt'] ?? '') as String),
+        unlinkRequested: (j['unlinkRequested'] ?? false) as bool,
+        unlinkReason: (j['unlinkReason'] ?? '') as String,
+      );
+
+  String get displayName {
+    if (accountName.trim().isNotEmpty) return accountName.trim();
+    if (email.isNotEmpty) return email;
+    return teacherName;
+  }
+}
+
+/// An announcement shown to teachers in the phone app.
+class NoticeItem {
+  final int id;
+  final String title;
+  final String body;
+  final int? faculty; // null = every teacher
+  final bool pinned;
+  final DateTime? createdAt; // real instant (UTC)
+
+  const NoticeItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.faculty,
+    required this.pinned,
+    required this.createdAt,
+  });
+
+  factory NoticeItem.fromJson(Map<String, dynamic> j) => NoticeItem(
+        id: (j['id'] as num).toInt(),
+        title: (j['title'] ?? '') as String,
+        body: (j['body'] ?? '') as String,
+        faculty: (j['faculty'] as num?)?.toInt(),
+        pinned: (j['pinned'] ?? false) as bool,
+        createdAt: DateTime.tryParse((j['createdAt'] ?? '') as String),
+      );
+}
+
+/// A phone-app login that has the admin screens (a row in Supabase `app_admins`).
+class PhoneAdmin {
+  final String userId;
+  final String email;
+  const PhoneAdmin(this.userId, this.email);
+
+  factory PhoneAdmin.fromJson(Map<String, dynamic> j) =>
+      PhoneAdmin(j['userId'].toString(), (j['email'] ?? '') as String);
+}
+
 class ApiClient {
   String baseUrl;
   String? token;
@@ -212,4 +311,50 @@ class ApiClient {
       });
 
   Future<void> deleteAdmin(String id) => _send('DELETE', '/admins/$id');
+
+  // ------------------------------------------------------ teacher accounts
+
+  Future<List<TeacherAccount>> listAccounts() async {
+    final j = await _send('GET', '/accounts', timeout: const Duration(seconds: 60));
+    return ((j['accounts'] ?? []) as List).map((e) => TeacherAccount.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Approve / deny / revoke ([status]), rename the account, bind to another teacher
+  /// ([teacherId]) or rename the teacher record ([teacherName]). Send only what changes.
+  Future<void> updateAccount(String id,
+          {String? status, int? teacherId, String? accountName, String? note, String? teacherName}) =>
+      _send('PATCH', '/accounts/$id', body: {
+        if (status != null) 'status': status,
+        if (teacherId != null) 'teacherId': teacherId,
+        if (accountName != null) 'accountName': accountName,
+        if (note != null) 'note': note,
+        if (teacherName != null) 'teacherName': teacherName,
+      });
+
+  /// Answer a teacher's request to unlink: approve deletes the link, otherwise it stays.
+  Future<void> resolveUnlink(String id, bool approve, {String note = ''}) =>
+      _send('POST', '/accounts/$id/unlink', body: {'approve': approve, 'note': note});
+
+  // ------------------------------------------------------------- notices
+
+  Future<List<NoticeItem>> listNotices() async {
+    final j = await _send('GET', '/notices');
+    return ((j['notices'] ?? []) as List).map((e) => NoticeItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> addNotice(String title, String body, {int? faculty, bool pinned = false}) =>
+      _send('POST', '/notices', body: {'title': title, 'body': body, 'faculty': faculty, 'pinned': pinned});
+
+  Future<void> deleteNotice(int id) => _send('DELETE', '/notices/$id');
+
+  // -------------------------------------------------------- phone admins
+
+  Future<List<PhoneAdmin>> listPhoneAdmins() async {
+    final j = await _send('GET', '/phone-admins', timeout: const Duration(seconds: 60));
+    return ((j['admins'] ?? []) as List).map((e) => PhoneAdmin.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> addPhoneAdmin(String email) => _send('POST', '/phone-admins', body: {'email': email});
+
+  Future<void> removePhoneAdmin(String userId) => _send('DELETE', '/phone-admins/$userId');
 }

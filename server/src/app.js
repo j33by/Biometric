@@ -182,6 +182,214 @@ function createApp({ db, jwtSecret, corsOrigin }) {
     res.json({ ok: true });
   }));
 
+  // ----------------------------------------------- teacher phone accounts
+  // The phone app binds a teacher's login to one teacher record. The same decisions the
+  // phone's admin screens make (supabase/teacher_app.sql) are made here, from the desktop.
+  // This server uses the service-role key, so the rules that row level security and the
+  // admin_* functions enforce there are repeated below.
+  const LINK_STATUSES = ['pending', 'approved', 'denied'];
+
+  const accountOut = (l, t) => ({
+    id: l.id, userId: l.user_id, email: l.email || '',
+    accountName: l.account_name || '', pickedName: l.teacher_name || '',
+    status: l.status, adminNote: l.admin_note || '',
+    teacherId: l.teacher_id,
+    teacherName: t ? t.name : (l.teacher_name || ''),
+    teacherMissing: !t || !!t.deleted,
+    faculty: t ? t.faculty : null, teacherNo: t ? t.teacher_no || '' : '', position: t ? t.position || '' : '',
+    createdAt: l.created_at || null, reviewedAt: l.reviewed_at || null,
+    unlinkRequested: !!l.unlink_requested, unlinkReason: l.unlink_reason || '',
+    unlinkRequestedAt: l.unlink_requested_at || null,
+  });
+
+  async function loadLink(id) {
+    const { data, error } = await db.from('teacher_links').select('*').eq('id', id).maybeSingle();
+    if (error) throw httpError(500, error.message);
+    if (!data) throw httpError(404, 'That account request no longer exists. Refresh the list.');
+    return data;
+  }
+
+  async function loadTeacher(id) {
+    const { data, error } = await db.from('teachers').select('*').eq('id', id).maybeSingle();
+    if (error) throw httpError(500, error.message);
+    return data;
+  }
+
+  api.get('/accounts', auth, needWrite, wrap(async (_req, res) => {
+    const lk = await db.from('teacher_links').select('*').limit(5000);
+    check(lk, 'accounts');
+    const ids = [...new Set(lk.data.map((l) => l.teacher_id))];
+    const byId = new Map();
+    for (let i = 0; i < ids.length; i += 200) {
+      const te = await db.from('teachers').select('id, name, faculty, teacher_no, position, deleted').in('id', ids.slice(i, i + 200));
+      check(te, 'teachers');
+      te.data.forEach((t) => byId.set(t.id, t));
+    }
+    const rows = lk.data
+      .map((l) => accountOut(l, byId.get(l.teacher_id)))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    res.json({ accounts: rows });
+  }));
+
+  // Approve / deny / revoke, edit the display name or note, bind to another teacher and
+  // rename the teacher record: any combination in one call. Nothing is written unless all
+  // of it is valid.
+  api.patch('/accounts/:id', auth, needWrite, wrap(async (req, res) => {
+    const b = req.body || {};
+    const link = await loadLink(req.params.id);
+    const patch = { reviewed_at: new Date().toISOString() };
+
+    if (b.status !== undefined) {
+      if (!LINK_STATUSES.includes(b.status)) throw httpError(400, 'Status must be pending, approved or denied');
+      patch.status = b.status;
+    }
+    let teacherId = link.teacher_id;
+    if (b.teacherId !== undefined) {
+      teacherId = Number(b.teacherId);
+      if (!Number.isInteger(teacherId) || teacherId < 1) throw httpError(400, 'Invalid teacher id');
+      patch.teacher_id = teacherId;
+    }
+    if (typeof b.accountName === 'string' && b.accountName.trim()) patch.account_name = b.accountName.trim().slice(0, 120);
+    if (typeof b.note === 'string') patch.admin_note = b.note.trim().slice(0, 300);
+
+    const status = patch.status || link.status;
+    let newName = null;
+    if (typeof b.teacherName === 'string') {
+      newName = b.teacherName.trim().slice(0, 120);
+      if (!newName) throw httpError(400, 'Name cannot be empty');
+    }
+
+    // The target teacher record must exist whenever it is being approved, rebound or renamed.
+    if (status === 'approved' || b.teacherId !== undefined || newName !== null) {
+      const t = await loadTeacher(teacherId);
+      if (!t || t.deleted) throw httpError(400, 'That teacher record does not exist (has the desktop synced to the cloud?)');
+    }
+    // A teacher record can belong to only one approved account.
+    if (status === 'approved') {
+      const { data, error } = await db.from('teacher_links').select('id').eq('teacher_id', teacherId).eq('status', 'approved');
+      if (error) throw httpError(500, error.message);
+      if (data.some((x) => x.id !== link.id)) throw httpError(409, 'That teacher record is already linked to another approved account.');
+    }
+
+    const up = await db.from('teacher_links').update(patch).eq('id', link.id);
+    if (up.error) {
+      if (up.error.code === '23505') throw httpError(409, 'That teacher record is already linked to another approved account.');
+      throw httpError(500, up.error.message);
+    }
+    if (newName !== null) {
+      // updated_at is bumped so the desktop pulls the new name and writes it to Employee Form.xls.
+      const rn = await db.from('teachers').update({ name: newName, updated_at: new Date().toISOString() }).eq('id', teacherId);
+      if (rn.error) throw httpError(500, rn.error.message);
+    }
+    res.json({ ok: true });
+  }));
+
+  // Answer a teacher's request to unlink. approve = the link is deleted (they can bind again);
+  // otherwise the link stays and the note is shown to the teacher.
+  api.post('/accounts/:id/unlink', auth, needWrite, wrap(async (req, res) => {
+    const link = await loadLink(req.params.id);
+    if (!link.unlink_requested) throw httpError(409, 'This account has no open unlink request. Refresh the list.');
+    if (req.body && req.body.approve === true) {
+      const del = await db.from('teacher_links').delete().eq('id', link.id);
+      if (del.error) throw httpError(500, del.error.message);
+    } else {
+      const note = String((req.body && req.body.note) || '').trim().slice(0, 300);
+      const up = await db.from('teacher_links')
+        .update({ unlink_requested: false, admin_note: note, reviewed_at: new Date().toISOString() })
+        .eq('id', link.id);
+      if (up.error) throw httpError(500, up.error.message);
+    }
+    res.json({ ok: true });
+  }));
+
+  // ------------------------------------------------------------ notices
+  // Announcements the phone app shows to teachers (faculty null = every teacher).
+  const noticeOut = (r) => ({
+    id: r.id, title: r.title, body: r.body || '', faculty: r.faculty == null ? null : r.faculty,
+    pinned: !!r.pinned, createdAt: r.created_at || null,
+  });
+
+  api.get('/notices', auth, needWrite, wrap(async (_req, res) => {
+    const { data, error } = await db.from('notices').select('*').limit(500);
+    if (error) throw httpError(500, error.message);
+    const rows = data.map(noticeOut).sort((a, b) =>
+      (b.pinned - a.pinned) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    res.json({ notices: rows });
+  }));
+
+  api.post('/notices', auth, needWrite, wrap(async (req, res) => {
+    const b = req.body || {};
+    const title = String(b.title || '').trim();
+    if (!title) throw httpError(400, 'A notice needs a title');
+    if (title.length > 120) throw httpError(400, 'Title is too long (120 characters at most)');
+    const body = String(b.body || '').trim();
+    if (body.length > 2000) throw httpError(400, 'Message is too long (2000 characters at most)');
+    let faculty = null;
+    if (b.faculty !== null && b.faculty !== undefined) {
+      faculty = Number(b.faculty);
+      if (!Number.isInteger(faculty) || faculty < 1 || faculty > 16) throw httpError(400, 'Faculty must be 1 to 16');
+    }
+    const row = { title, body, faculty, pinned: b.pinned === true, created_at: new Date().toISOString() };
+    const { data, error } = await db.from('notices').insert(row).select('*').single();
+    if (error) throw httpError(500, error.message);
+    res.status(201).json({ notice: noticeOut(data) });
+  }));
+
+  api.delete('/notices/:id', auth, needWrite, wrap(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw httpError(400, 'Invalid notice id');
+    const { data, error } = await db.from('notices').select('id').eq('id', id).maybeSingle();
+    if (error) throw httpError(500, error.message);
+    if (!data) throw httpError(404, 'That notice no longer exists. Refresh the list.');
+    const del = await db.from('notices').delete().eq('id', id);
+    if (del.error) throw httpError(500, del.error.message);
+    res.json({ ok: true });
+  }));
+
+  // ------------------------------------------------------- phone admins
+  // Phone-app admins are Supabase Auth users listed in app_admins (what the SQL one-liner
+  // in the README did by hand). Looking a user up by email needs the Auth admin API.
+  async function authUsers() {
+    const out = [];
+    for (let page = 1; page <= 50; page++) {
+      const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error) throw httpError(500, error.message);
+      const users = (data && data.users) || [];
+      out.push(...users);
+      if (users.length < 1000) break;
+    }
+    return out;
+  }
+
+  api.get('/phone-admins', auth, needSuper, wrap(async (_req, res) => {
+    const { data, error } = await db.from('app_admins').select('*').limit(1000);
+    if (error) throw httpError(500, error.message);
+    const users = new Map((await authUsers()).map((u) => [u.id, u]));
+    const rows = data.map((a) => ({
+      userId: a.user_id, email: (users.get(a.user_id) || {}).email || '', createdAt: a.created_at || null,
+    })).sort((a, b) => a.email.localeCompare(b.email));
+    res.json({ admins: rows });
+  }));
+
+  api.post('/phone-admins', auth, needSuper, wrap(async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw httpError(400, 'Enter a valid email address');
+    const user = (await authUsers()).find((u) => String(u.email || '').toLowerCase() === email);
+    if (!user) throw httpError(404, 'No phone account uses that email. They must sign up in the phone app first.');
+    const { error } = await db.from('app_admins').insert({ user_id: user.id });
+    if (error) throw httpError(error.code === '23505' ? 409 : 500, error.code === '23505' ? 'That account is already a phone admin' : error.message);
+    res.status(201).json({ admin: { userId: user.id, email: user.email } });
+  }));
+
+  api.delete('/phone-admins/:userId', auth, needSuper, wrap(async (req, res) => {
+    const { data, error } = await db.from('app_admins').select('user_id').eq('user_id', req.params.userId).maybeSingle();
+    if (error) throw httpError(500, error.message);
+    if (!data) throw httpError(404, 'That account is not a phone admin. Refresh the list.');
+    const del = await db.from('app_admins').delete().eq('user_id', req.params.userId);
+    if (del.error) throw httpError(500, del.error.message);
+    res.json({ ok: true });
+  }));
+
   // ------------------------------------------------------------- sync
   api.get('/sync/snapshot', auth, wrap(async (_req, res) => {
     const [te, fa, sh, lv, ru] = await Promise.all([

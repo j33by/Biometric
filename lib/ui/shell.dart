@@ -4,12 +4,15 @@ import '../core/dates.dart';
 import '../core/ph_time.dart';
 import '../data/app_state.dart';
 import '../main.dart';
+import 'accounts_page.dart';
 import 'admins_page.dart';
 import 'attendance_page.dart';
 import 'dashboard_page.dart';
 import 'faculty_page.dart';
 import 'leaves_page.dart';
 import 'nav.dart';
+import 'notices_page.dart';
+import 'phone_admins_page.dart';
 import 'settings_page.dart';
 import 'teachers_page.dart';
 import 'sync_page.dart';
@@ -30,7 +33,10 @@ const _navs = <_Nav>[
   _Nav('Leaves', Icons.event_busy_outlined),
   _Nav('Faculty & shifts', Icons.schedule_outlined, 'Setup'),
   _Nav('Device sync', Icons.usb_rounded),
-  _Nav('Administrators', Icons.admin_panel_settings_outlined, 'System'),
+  _Nav('Teacher accounts', Icons.link_outlined, 'System'),
+  _Nav('Notices', Icons.campaign_outlined),
+  _Nav('Phone admins', Icons.phone_android_outlined),
+  _Nav('Administrators', Icons.admin_panel_settings_outlined),
   _Nav('Settings', Icons.tune_outlined),
 ];
 
@@ -59,6 +65,12 @@ class _ShellState extends State<Shell> {
         return const FacultyPage();
       case kNavSync:
         return const SyncPage();
+      case kNavAccounts:
+        return const AccountsPage();
+      case kNavNotices:
+        return const NoticesPage();
+      case kNavPhoneAdmins:
+        return const PhoneAdminsPage();
       case kNavAdmins:
         return const AdminsPage();
       default:
@@ -126,7 +138,7 @@ class _Sidebar extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
               child: Text(_navs[i].group!.toUpperCase(), style: const TextStyle(color: Color(0xFF6F7F8F), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
             ),
-          if (!(i == kNavAdmins && !(app.admin?.isSuper ?? false))) _item(i),
+          if (_visible(i, app)) _item(i),
         ],
         const Spacer(),
         Container(
@@ -151,6 +163,14 @@ class _Sidebar extends StatelessWidget {
         ),
       ]),
     );
+  }
+
+  /// Superadmin-only pages and pages that change data are hidden from accounts that cannot use them.
+  bool _visible(int i, AppState app) {
+    final a = app.admin;
+    if (i == kNavAdmins || i == kNavPhoneAdmins) return a?.isSuper ?? false;
+    if (i == kNavAccounts || i == kNavNotices) return a?.canWrite ?? false;
+    return true;
   }
 
   Widget _item(int i) {
