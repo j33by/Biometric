@@ -1,7 +1,7 @@
 name: attendance_console
 description: Desktop dashboard for a biometric attendance device (USB / Excel / Supabase).
 publish_to: none
-version: 1.0.3
+version: 1.0.4
 
 environment:
   sdk: ^3.9.0
