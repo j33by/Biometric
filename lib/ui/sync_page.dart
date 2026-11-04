@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/dates.dart';
+import '../core/ph_time.dart';
 import '../data/app_state.dart';
 import '../main.dart';
 import 'theme.dart';
@@ -79,9 +80,9 @@ class SyncPage extends StatelessWidget {
                 ]),
                 const SizedBox(height: 14),
                 const Divider(height: 1),
-                _switch('Rewrite Employee Form.xls automatically', 'After every student, section, shift or rule change.', app.autoExport, (v) => app.updateSettings(autoExport: v)),
+                _switch('Rewrite Employee Form.xls automatically', 'After every teacher, faculty, shift or rule change.', app.autoExport, (v) => app.updateSettings(autoExport: v)),
                 _switch('Watch for USB sticks', 'Import Attendance_Logs.txt as soon as a stick containing it is inserted.', app.autoUsb, (v) => app.updateSettings(autoUsb: v)),
-                _switch('Also write Employee Form.xls to the stick', 'So the device can upload new students straight from it.', app.writeUsb, (v) => app.updateSettings(writeUsb: v)),
+                _switch('Also write Employee Form.xls to the stick', 'So the device can upload new teachers straight from it.', app.writeUsb, (v) => app.updateSettings(writeUsb: v)),
               ]),
             ),
             const SizedBox(height: 14),
@@ -118,6 +119,8 @@ class SyncPage extends StatelessWidget {
         Expanded(
           flex: 2,
           child: Column(children: [
+            const _ClockPanel(),
+            const SizedBox(height: 14),
             Panel(
               title: 'Status',
               child: Column(children: [
@@ -135,7 +138,7 @@ class SyncPage extends StatelessWidget {
               child: const Text(
                 '1. Copy Employee Form.xls to the USB stick (automatic if the stick is plugged in).\n'
                 '2. On the device: menu → USB → upload employee info.\n'
-                '3. New students must still enrol their fingerprint or card on the device under the ID shown here.',
+                '3. New teachers must still enrol their fingerprint or card on the device under the ID shown here.',
                 style: TextStyle(color: C.muted, height: 1.6),
               ),
             ),
@@ -180,4 +183,142 @@ class SyncPage extends StatelessWidget {
         value: value,
         onChanged: onChanged,
       );
+}
+
+
+/// Keeps the biometric device and this app on the same clock (Philippine time).
+///
+/// Shifts, punches and "today" are all plain wall-clock Philippine times.  If the
+/// device's own clock is off (set to UTC, or just drifted), every punch is wrong by
+/// the same amount.  Type what the device screen shows right now and the app works
+/// out the correction, which is then added to every punch imported from now on.
+class _ClockPanel extends StatefulWidget {
+  const _ClockPanel();
+  @override
+  State<_ClockPanel> createState() => _ClockPanelState();
+}
+
+class _ClockPanelState extends State<_ClockPanel> {
+  final _device = TextEditingController();
+  int? _suggested; // minutes to ADD to device punches
+  String? _msg;
+  String? _serverMsg;
+  bool _busy = false;
+
+  void _compute() {
+    final n = normalizeTimeInput(_device.text);
+    if (n == null) {
+      setState(() {
+        _suggested = null;
+        _msg = 'Type the time the device shows, e.g. 7:42 AM or 07:42.';
+      });
+      return;
+    }
+    final now = phNow();
+    final dev = parseHm(n)!;
+    var diff = (now.hour * 60 + now.minute) - dev; // Philippine time minus device time
+    while (diff > 720) {
+      diff -= 1440;
+    }
+    while (diff <= -720) {
+      diff += 1440;
+    }
+    setState(() {
+      _suggested = diff;
+      _msg = diff.abs() <= 1
+          ? 'The device clock matches Philippine time. No correction needed.'
+          : 'The device is ${fmtDuration(diff.abs())} ${diff > 0 ? 'behind' : 'ahead of'} Philippine time (${fmtTime12(now)}).';
+    });
+  }
+
+  Future<void> _checkServer() async {
+    final app = context.app;
+    setState(() {
+      _busy = true;
+      _serverMsg = null;
+    });
+    final server = await app.api.serverPhTime();
+    if (!mounted) return;
+    final mine = phNow();
+    setState(() {
+      _busy = false;
+      if (server == null) {
+        _serverMsg = 'Could not reach the server.';
+      } else {
+        final d = mine.difference(server).inMinutes.abs();
+        _serverMsg = d <= 2
+            ? 'This computer agrees with the server (${fmtTime12(server)} PHT).'
+            : 'This computer is ${fmtDuration(d)} off the server (server ${fmtTime12(server)}, computer ${fmtTime12(mine)}). Fix the computer clock.';
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.app;
+    final off = app.rules.clockOffsetMin;
+    final zone = localZoneOffsetFromPhHours();
+    return Panel(
+      title: 'Device clock · Philippine time',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const PhClock(showDate: false, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+          const SizedBox(width: 12),
+          Expanded(child: Text(fmtDateLong(phNow()), style: const TextStyle(color: C.muted))),
+        ]),
+        const SizedBox(height: 6),
+        Text(
+          zone == 0
+              ? 'This computer is already on Philippine time.'
+              : 'This computer is set ${zone.abs()} h ${zone > 0 ? 'ahead of' : 'behind'} the Philippines. The app ignores that and always uses UTC+8.',
+          style: const TextStyle(color: C.muted, fontSize: 12.5),
+        ),
+        if (app.clockWarning != null) ...[
+          const SizedBox(height: 8),
+          Text(app.clockWarning!, style: const TextStyle(color: C.warn, fontSize: 12.5, height: 1.35)),
+        ],
+        const Divider(height: 22),
+        const Text('Look at the device screen and type the time it shows now:', style: TextStyle(fontSize: 12.5)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: TextField(controller: _device, onSubmitted: (_) => _compute(), decoration: const InputDecoration(hintText: '7:42 AM'))),
+          const SizedBox(width: 8),
+          OutlinedButton(onPressed: _compute, child: const Text('Check')),
+        ]),
+        if (_msg != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg!, style: TextStyle(color: (_suggested ?? 0).abs() <= 1 ? C.ok : C.warn, fontSize: 12.5, height: 1.35))),
+        if (_suggested != null && _suggested!.abs() > 1 && app.canWrite)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              FilledButton(
+                onPressed: () {
+                  app.setClockOffset(_suggested!);
+                  setState(() {
+                    _msg = 'Saved. Punches imported from now on get ${_suggested! > 0 ? '+' : ''}$_suggested min added.';
+                    _suggested = null;
+                  });
+                },
+                child: Text('Correct punches by ${_suggested! > 0 ? '+' : ''}$_suggested min'),
+              ),
+              const Text('Better: also set the device clock itself, then reset this to 0.', style: TextStyle(fontSize: 11.5, color: C.muted)),
+            ]),
+          ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: Text(off == 0 ? 'Current correction: none' : 'Current correction: ${off > 0 ? '+' : ''}$off min on every imported punch', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
+          if (off != 0 && app.canWrite) TextButton(onPressed: () => app.setClockOffset(0), child: const Text('Reset to 0')),
+        ]),
+        if (off != 0)
+          const Text('Set it before the first import. Changing it later does not move punches already stored.', style: TextStyle(fontSize: 11.5, color: C.muted)),
+        if (app.cloudEnabled) ...[
+          const Divider(height: 22),
+          Row(children: [
+            OutlinedButton(onPressed: _busy ? null : _checkServer, child: _busy ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Check this computer vs server')),
+            const SizedBox(width: 10),
+            Expanded(child: Text(_serverMsg ?? '', style: const TextStyle(fontSize: 12.5, color: C.muted))),
+          ]),
+        ],
+      ]),
+    );
+  }
 }

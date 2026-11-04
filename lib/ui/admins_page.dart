@@ -183,7 +183,7 @@ class _AdminDialogState extends State<_AdminDialog> {
             decoration: const InputDecoration(labelText: 'Role'),
             items: const [
               DropdownMenuItem(value: 'superadmin', child: Text('Superadmin – everything, manages accounts')),
-              DropdownMenuItem(value: 'admin', child: Text('Admin – edit students, import data')),
+              DropdownMenuItem(value: 'admin', child: Text('Admin – edit teachers, import data')),
               DropdownMenuItem(value: 'viewer', child: Text('Viewer – read only')),
             ],
             onChanged: (v) => setState(() => _role = v ?? 'admin'),

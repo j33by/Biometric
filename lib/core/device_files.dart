@@ -1,11 +1,11 @@
 // Maps the biometric device's USB files to/from app models.
 //
-//   Employee Form.xls     (upload to device)   students, sections, shifts, rules
+//   Employee Form.xls     (upload to device)   teachers, faculty, shifts, rules
 //   Attendance_Logs.txt   (download from device) raw punches
 //
 // Layout facts were taken from a real export of this device family:
 //   "Employee Form"          header row has "*ID" in column A; the row after it
-//                            holds weekday formulas; students start 2 rows below.
+//                            holds weekday formulas; teachers start 2 rows below.
 //                            A: ID  B: Name  C: Department 1-16  D: Authority 0/1
 //                            E..AI: 31 days of schedule (blank = use department)
 //   "Attendance Rules Form"  company in D2, shifts in A5:G14, departments in
@@ -23,13 +23,13 @@ const String kFormSheetName = 'Employee Form';
 const String kRulesSheetName = 'Attendance Rules Form';
 
 class DeviceForm {
-  final List<Student> students;
-  final List<Section> sections;
+  final List<Teacher> teachers;
+  final List<Faculty> faculty;
   final List<Shift> shifts;
   final Rules rules;
   final bool rulesFound;
   final String? formDate;
-  DeviceForm(this.students, this.sections, this.shifts, this.rules, this.rulesFound, this.formDate);
+  DeviceForm(this.teachers, this.faculty, this.shifts, this.rules, this.rulesFound, this.formDate);
 }
 
 class DeviceFormException implements Exception {
@@ -89,7 +89,7 @@ DeviceForm readDeviceForm(Uint8List bytes) {
     }
   }
 
-  final students = <Student>[];
+  final teachers = <Teacher>[];
   final seen = <int>{};
   for (var r = header + 2; r <= form.lastRow; r++) {
     final id = form.number(r, 0);
@@ -102,17 +102,17 @@ DeviceForm readDeviceForm(Uint8List bytes) {
       sched.add(v);
       if (v != null) any = true;
     }
-    students.add(Student(
+    teachers.add(Teacher(
       id: id.toInt(),
       name: (form.text(r, 1) ?? '').trim(),
-      section: (form.number(r, 2) ?? 1).toInt().clamp(1, 16),
+      faculty: (form.number(r, 2) ?? 1).toInt().clamp(1, 16),
       authority: (form.number(r, 3) ?? 0).toInt() == 1 ? 1 : 0,
       schedule: any ? sched : null,
     ));
   }
 
   final rulesSheet = wb.sheetByName(kRulesSheetName);
-  final sections = <Section>[];
+  final faculty = <Faculty>[];
   final shifts = <Shift>[];
   var rules = Rules();
   var found = false;
@@ -143,10 +143,10 @@ DeviceForm readDeviceForm(Uint8List bytes) {
       for (var d = 0; d < 7; d++) {
         week.add((rulesSheet.number(r, 9 + d) ?? 0).toInt());
       }
-      sections.add(Section(no: i + 1, name: (rulesSheet.text(r, 8) ?? '').trim(), week: week));
+      faculty.add(Faculty(no: i + 1, name: (rulesSheet.text(r, 8) ?? '').trim(), week: week));
     }
   }
-  return DeviceForm(students, sections, shifts, rules, found, formDate);
+  return DeviceForm(teachers, faculty, shifts, rules, found, formDate);
 }
 
 bool _sameValue(Object? a, Object? b) {
@@ -169,8 +169,8 @@ void _setIfChanged(XlsSheet s, int r, int c, Object? v, {int fallbackXf = 0}) {
 /// given data applied.  Anything not listed below is left byte-identical.
 Uint8List writeDeviceForm(
   Uint8List template, {
-  required List<Student> students,
-  List<Section>? sections,
+  required List<Teacher> teachers,
+  List<Faculty>? faculty,
   List<Shift>? shifts,
   Rules? rules,
 }) {
@@ -184,7 +184,7 @@ Uint8List writeDeviceForm(
   if (header < 0) throw DeviceFormException('Template is not a device Employee Form');
   final dataStart = header + 2;
 
-  // Style template: first existing student row, else the header row.
+  // Style template: first existing teacher row, else the header row.
   final styleRow = form.rows[dataStart] ?? form.rows[header];
   final xfByCol = <int, int>{};
   if (styleRow != null) {
@@ -196,13 +196,13 @@ Uint8List writeDeviceForm(
   }
 
   form.clearRowsFrom(dataStart);
-  final list = students.where((s) => !s.deleted).toList()..sort((a, b) => a.id.compareTo(b.id));
+  final list = teachers.where((s) => !s.deleted).toList()..sort((a, b) => a.id.compareTo(b.id));
   for (var i = 0; i < list.length; i++) {
     final s = list[i];
     final r = dataStart + i;
     form.set(r, 0, s.id, xf: xfByCol[0] ?? 0);
     form.set(r, 1, s.name, xf: xfByCol[1] ?? 0);
-    form.set(r, 2, s.section.clamp(1, 16), xf: xfByCol[2] ?? 0);
+    form.set(r, 2, s.faculty.clamp(1, 16), xf: xfByCol[2] ?? 0);
     form.set(r, 3, s.authority == 1 ? 1 : 0, xf: xfByCol[3] ?? 0);
     for (var c = 4; c <= maxCol; c++) {
       final v = (s.schedule != null && c - 4 < s.schedule!.length) ? s.schedule![c - 4] : null;
@@ -229,8 +229,8 @@ Uint8List writeDeviceForm(
         }
       }
     }
-    if (sections != null) {
-      for (final sec in sections) {
+    if (faculty != null) {
+      for (final sec in faculty) {
         if (sec.no < 1 || sec.no > 16) continue;
         final r = 3 + sec.no;
         _setIfChanged(rs, r, 8, sec.name);
@@ -296,7 +296,7 @@ ParsedLogs parseAttendanceLogs(String text) {
       continue;
     }
     out.add(PunchLog(
-      studentId: id,
+      teacherId: id,
       name: cols[1].trim(),
       dept: cols[2].trim(),
       time: t,

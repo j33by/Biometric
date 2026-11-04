@@ -18,6 +18,9 @@ import '../core/attendance.dart';
 import '../core/dates.dart';
 import '../core/device_files.dart';
 import '../core/models.dart';
+import '../core/ph_time.dart';
+import '../core/reports.dart' as reports;
+import '../core/seed.dart';
 import 'api_client.dart';
 import 'persist.dart';
 
@@ -44,8 +47,8 @@ class ImportResult {
   final int added;
   final int duplicates;
   final int bad;
-  final int newStudents;
-  const ImportResult(this.source, this.total, this.added, this.duplicates, this.bad, this.newStudents);
+  final int newTeachers;
+  const ImportResult(this.source, this.total, this.added, this.duplicates, this.bad, this.newTeachers);
 }
 
 class UsbDrive {
@@ -59,8 +62,9 @@ enum SyncPhase { idle, syncing, error }
 
 class AppState extends ChangeNotifier {
   // ------------------------------------------------------------ data
-  final Map<int, Student> _students = {};
-  final Map<int, Section> sections = {};
+  final Map<int, Teacher> _teachers = {};
+  final Map<int, Faculty> faculty = {};
+  final Map<String, LeaveRecord> _leaves = {};
   final Map<int, Shift> shifts = {};
   Rules rules = Rules();
   final List<PunchLog> logs = [];
@@ -86,6 +90,9 @@ class AppState extends ChangeNotifier {
   DateTime? lastCloudSync;
   DateTime? lastExport;
   DateTime? lastImport;
+  /// Set when an import contained punches later than "now" in Philippine time,
+  /// i.e. the device clock is ahead (or in another zone). Shown on Device sync.
+  String? clockWarning;
   List<UsbDrive> drives = const [];
   final List<ActivityEntry> activity = [];
 
@@ -103,40 +110,52 @@ class AppState extends ChangeNotifier {
 
   // ============================================================ getters
 
-  List<Student> get students {
-    final l = _students.values.where((s) => !s.deleted).toList()..sort((a, b) => a.id.compareTo(b.id));
+  List<Teacher> get teachers {
+    final l = _teachers.values.where((s) => !s.deleted).toList()..sort((a, b) => a.id.compareTo(b.id));
     return l;
   }
 
-  Student? studentById(int id) {
-    final s = _students[id];
+  Teacher? teacherById(int id) {
+    final s = _teachers[id];
     return (s == null || s.deleted) ? null : s;
   }
 
-  int get nextStudentId {
+  int get nextTeacherId {
     var m = 0;
-    for (final s in _students.values) {
+    for (final s in _teachers.values) {
       if (s.id > m) m = s.id;
     }
     return m + 1;
   }
 
-  String sectionName(int no) {
-    final s = sections[no];
-    if (s == null || s.name.trim().isEmpty) return 'Section $no';
+  String facultyName(int no) {
+    final s = faculty[no];
+    if (s == null || s.name.trim().isEmpty) return 'Faculty $no';
     return s.name;
   }
+
+  /// Current Philippine wall-clock time (never the computer's own zone).
+  DateTime get now => phNow();
+  DateTime get today => phToday();
+
+  List<LeaveRecord> get leaves {
+    final l = _leaves.values.where((x) => !x.deleted).toList()..sort((a, b) => b.from.compareTo(a.from));
+    return l;
+  }
+
+  List<LeaveRecord> leavesFor(int teacherId) => leaves.where((l) => l.teacherId == teacherId).toList();
 
   bool get signedIn => admin != null;
   bool get canWrite => admin?.canWrite ?? false;
   bool get cloudEnabled => token != null && api.configured && !localMode;
 
   AttendanceBook get book => _book ??= AttendanceBook(
-        students: students,
-        sections: sections,
+        teachers: teachers,
+        faculty: faculty,
         shifts: shifts,
         rules: rules,
         logsByDate: logsByDate,
+        leaves: leaves,
       );
 
   int get pendingCloudChanges => _dirty.length + (logs.length - _cloudLogCursor);
@@ -211,14 +230,20 @@ class AppState extends ChangeNotifier {
     _serverLogCursor = ((j['serverLogCursor'] ?? 0) as num).toInt();
     _importedSig.addAll(((j['importedSig'] ?? {}) as Map).map((k, v) => MapEntry(k as String, v as String)));
     _writtenSig.addAll(((j['writtenSig'] ?? {}) as Map).map((k, v) => MapEntry(k as String, v as String)));
-    _dirty.addAll(((j['dirty'] ?? []) as List).map((e) => e as String));
-    for (final e in (j['students'] ?? []) as List) {
-      final st = Student.fromJson(e as Map<String, dynamic>);
-      _students[st.id] = st;
+    // Databases written by the old student version used 'student:' / 'section:' keys.
+    _dirty.addAll(((j['dirty'] ?? []) as List)
+        .map((e) => (e as String).replaceFirst('student:', 'teacher:').replaceFirst('section:', 'faculty:')));
+    for (final e in (j['teachers'] ?? j['students'] ?? []) as List) {
+      final st = Teacher.fromJson(e as Map<String, dynamic>);
+      _teachers[st.id] = st;
     }
-    for (final e in (j['sections'] ?? []) as List) {
-      final sc = Section.fromJson(e as Map<String, dynamic>);
-      sections[sc.no] = sc;
+    for (final e in (j['faculty'] ?? j['sections'] ?? []) as List) {
+      final sc = Faculty.fromJson(e as Map<String, dynamic>);
+      faculty[sc.no] = sc;
+    }
+    for (final e in (j['leaves'] ?? []) as List) {
+      final lv = LeaveRecord.fromJson(e as Map<String, dynamic>);
+      _leaves[lv.id] = lv;
     }
     for (final e in (j['shifts'] ?? []) as List) {
       final sh = Shift.fromJson(e as Map<String, dynamic>);
@@ -247,8 +272,9 @@ class AppState extends ChangeNotifier {
         'importedSig': _importedSig,
         'writtenSig': _writtenSig,
         'dirty': _dirty.toList(),
-        'students': _students.values.map((e) => e.toJson()).toList(),
-        'sections': sections.values.map((e) => e.toJson()).toList(),
+        'teachers': _teachers.values.map((e) => e.toJson()).toList(),
+        'faculty': faculty.values.map((e) => e.toJson()).toList(),
+        'leaves': _leaves.values.map((e) => e.toJson()).toList(),
         'shifts': shifts.values.map((e) => e.toJson()).toList(),
         'rules': rules.toJson(),
         'activity': activity.reversed.take(60).toList().reversed.map((e) => e.toJson()).toList(),
@@ -265,32 +291,69 @@ class AppState extends ChangeNotifier {
 
   void _ensureDefaults() {
     for (var i = 1; i <= 16; i++) {
-      sections.putIfAbsent(i, () => Section(no: i, name: i == 1 ? 'Section 1' : ''));
+      faculty.putIfAbsent(i, () => Faculty(no: i, name: i == 1 ? 'Faculty 1' : ''));
     }
     for (var i = 1; i <= 10; i++) {
-      shifts.putIfAbsent(i, () => i == 1 ? Shift(no: 1, in1: '08:00', out1: '17:00') : Shift(no: i));
+      shifts.putIfAbsent(i, () => Shift(no: i));
     }
+  }
+
+  /// Puts the Grade 12 ABM class program (teachers, faculty slots, shifts) into the app.
+  /// [stamp] decides who wins against what is already in the cloud: first-run seeding
+  /// uses an old date (anything already saved wins), the button uses "now".
+  void _applyStarter(DateTime stamp) {
+    final s = cnhsG12AbmStarter(stamp);
+    for (final x in s.teachers) {
+      _teachers[x.id] = x;
+      _dirty.add('teacher:${x.id}');
+    }
+    for (final x in s.faculty) {
+      faculty[x.no] = x;
+      _dirty.add('faculty:${x.no}');
+    }
+    for (final x in s.shifts) {
+      shifts[x.no] = x;
+      _dirty.add('shift:${x.no}');
+    }
+  }
+
+  /// "Load starter schedule" button: overwrites teachers 4-8, faculty slots 1-16 and shifts 1-10.
+  void loadStarterSchedule() {
+    _applyStarter(DateTime.now());
+    if (rules.company.trim().isEmpty || rules.company.trim().toLowerCase() == 'cnhs') {
+      rules = rules.copy()
+        ..company = 'Calape National High School'
+        ..updatedAt = DateTime.now();
+      _dirty.add('rules');
+    }
+    _log('ok', 'Loaded the Grade 12 ABM class program: teachers 4-8, 7 shifts, 6 faculty slots.');
+    _changed();
   }
 
   Future<void> _seedFromTemplate() async {
     try {
       final data = await rootBundle.load('assets/templates/Employee_Form.xls');
       final form = readDeviceForm(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
-      for (final s in form.students) {
-        _students[s.id] = s;
-      }
-      for (final s in form.sections) {
-        sections[s.no] = s;
-      }
-      for (final s in form.shifts) {
-        shifts[s.no] = s;
+      // The bundled template is the school's own device file. Keep everyone already on
+      // the device (so nothing is lost on upload), then lay the corrected class program
+      // over it (shifts, faculty slots and teachers 4-8).
+      for (final s in form.teachers) {
+        if (s.name.trim().isEmpty) continue;
+        s.updatedAt = DateTime(2026, 1, 1);
+        _teachers[s.id] = s;
+        _dirty.add('teacher:${s.id}');
       }
       if (form.rulesFound) rules = form.rules;
     } catch (_) {
       // fall through to defaults
     }
+    if (rules.company.trim().isEmpty || rules.company.trim().toLowerCase() == 'cnhs') {
+      rules.company = 'Calape National High School';
+    }
+    rules.updatedAt = DateTime(2026, 1, 1);
+    _applyStarter(DateTime(2026, 1, 1));
     _ensureDefaults();
-    _log('info', 'First run: loaded the starter Employee Form (${_students.length} students).');
+    _log('info', 'First run: loaded the Grade 12 ABM class program (${_teachers.length} teachers, 6 shifts).');
     _saveSoon();
   }
 
@@ -310,46 +373,96 @@ class AppState extends ChangeNotifier {
 
   // ============================================================ editing
 
-  Student addStudent({required String name, required int section, int authority = 0, String lrn = '', String contact = '', String notes = ''}) {
-    final s = Student(
-        id: nextStudentId, name: name.trim(), section: section, authority: authority, lrn: lrn, contact: contact, notes: notes);
-    _students[s.id] = s;
-    _dirty.add('student:${s.id}');
-    _log('ok', 'Added student ${s.id} · ${s.name}');
+  Teacher addTeacher(
+      {required String name,
+      required int facultyNo,
+      int authority = 0,
+      String teacherNo = '',
+      String position = '',
+      String contact = '',
+      String notes = ''}) {
+    final s = Teacher(
+        id: nextTeacherId,
+        name: name.trim(),
+        faculty: facultyNo,
+        authority: authority,
+        teacherNo: teacherNo,
+        position: position,
+        contact: contact,
+        notes: notes);
+    _teachers[s.id] = s;
+    _dirty.add('teacher:${s.id}');
+    _log('ok', 'Added teacher ${s.id} · ${s.name}');
     _changed();
     return s;
   }
 
-  /// Creates or replaces a student with an explicit device ID.
-  String? saveStudent(Student s, {required bool isNew}) {
-    if (isNew && _students[s.id] != null && !_students[s.id]!.deleted) {
-      return 'ID ${s.id} is already used by ${_students[s.id]!.name}';
+  /// Creates or replaces a teacher with an explicit device ID.
+  String? saveTeacher(Teacher s, {required bool isNew}) {
+    if (isNew && _teachers[s.id] != null && !_teachers[s.id]!.deleted) {
+      return 'ID ${s.id} is already used by ${_teachers[s.id]!.name}';
     }
     s.updatedAt = DateTime.now();
     s.deleted = false;
-    _students[s.id] = s;
-    _dirty.add('student:${s.id}');
-    _log('ok', '${isNew ? 'Added' : 'Updated'} student ${s.id} · ${s.name}');
+    _teachers[s.id] = s;
+    _dirty.add('teacher:${s.id}');
+    _log('ok', '${isNew ? 'Added' : 'Updated'} teacher ${s.id} · ${s.name}');
     _changed();
     return null;
   }
 
-  void deleteStudent(int id) {
-    final s = _students[id];
+  void deleteTeacher(int id) {
+    final s = _teachers[id];
     if (s == null) return;
     s.deleted = true;
     s.updatedAt = DateTime.now();
-    _dirty.add('student:$id');
-    _log('warn', 'Removed student $id · ${s.name}');
+    _dirty.add('teacher:$id');
+    _log('warn', 'Removed teacher $id · ${s.name}');
     _changed();
     if (!cloudEnabled) _purgeTombstones();
   }
 
-  void saveSection(Section s) {
+  /// True if another teacher already has this Teacher ID (the DepEd / employee number).
+  Teacher? teacherWithNo(String teacherNo, {int? exceptId}) {
+    final n = teacherNo.trim().toLowerCase();
+    if (n.isEmpty) return null;
+    for (final t in teachers) {
+      if (t.id != exceptId && t.teacherNo.trim().toLowerCase() == n) return t;
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------ leaves
+
+  String newLeaveId() =>
+      '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(DateTime.now().millisecond * 7919 % 46656).toRadixString(36)}';
+
+  void saveLeave(LeaveRecord l) {
+    l.updatedAt = DateTime.now();
+    l.deleted = false;
+    _leaves[l.id] = l;
+    _dirty.add('leave:${l.id}');
+    final who = teacherById(l.teacherId)?.name ?? 'ID ${l.teacherId}';
+    _log('ok', 'Leave saved for $who · ${l.type} · ${fmtDayMonth(l.from)}${l.days > 1 ? ' – ${fmtDayMonth(l.to)}' : ''}');
+    _changed(exportForm: false);
+  }
+
+  void deleteLeave(String id) {
+    final l = _leaves[id];
+    if (l == null) return;
+    l.deleted = true;
+    l.updatedAt = DateTime.now();
+    _dirty.add('leave:$id');
+    _log('warn', 'Leave removed (${l.type}, ID ${l.teacherId})');
+    _changed(exportForm: false);
+    if (!cloudEnabled) _leaves.remove(id);
+  }
+
+  void saveFaculty(Faculty s) {
     s.updatedAt = DateTime.now();
-    sections[s.no] = s;
-    _dirty.add('section:${s.no}');
-    _log('ok', 'Saved section ${s.no} · ${s.name}');
+    faculty[s.no] = s;
+    _dirty.add('faculty:${s.no}');
+    _log('ok', 'Saved faculty ${s.no} · ${s.name}');
     _changed();
   }
 
@@ -361,6 +474,14 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  /// Device clock correction in minutes (0 = the device already shows Philippine time).
+  /// Applies to punches imported from now on - see importLogsFromBytes.
+  void setClockOffset(int minutes) {
+    final r = rules.copy()..clockOffsetMin = minutes;
+    saveRules(r);
+    clockWarning = null;
+  }
+
   void saveRules(Rules r) {
     r.updatedAt = DateTime.now();
     rules = r;
@@ -370,7 +491,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _purgeTombstones() {
-    _students.removeWhere((_, s) => s.deleted && !_dirty.contains('student:${s.id}'));
+    _teachers.removeWhere((_, s) => s.deleted && !_dirty.contains('teacher:${s.id}'));
+    _leaves.removeWhere((_, l) => l.deleted && !_dirty.contains('leave:${l.id}'));
   }
 
   // ============================================================ logs
@@ -386,25 +508,41 @@ class AppState extends ChangeNotifier {
     final parsed = parseAttendanceLogs(decodeLogBytes(bytes));
     final added = <PunchLog>[];
     var dup = 0;
-    var newStudents = 0;
-    for (final l in parsed.logs) {
+    var newTeachers = 0;
+    // If the device clock is off, the admin set a correction (Device sync > Device clock).
+    // It is applied here, once, so every stored punch (and the cloud copy) is Philippine time.
+    final offset = Duration(minutes: rules.clockOffsetMin);
+    final phNowTime = phNow();
+    DateTime? latest;
+    for (final raw in parsed.logs) {
+      final l = offset == Duration.zero
+          ? raw
+          : PunchLog(teacherId: raw.teacherId, name: raw.name, dept: raw.dept, time: raw.time.add(offset), deviceId: raw.deviceId);
+      if (latest == null || l.time.isAfter(latest)) latest = l.time;
       if (_indexLog(l)) {
         added.add(l);
-        final existing = _students[l.studentId];
+        final existing = _teachers[l.teacherId];
         if (existing == null) {
-          var sec = 1;
-          for (final s in sections.values) {
+          // Match the device's "Dept." text to a faculty slot (its subject name). If none
+          // matches, use the first empty slot (no duty) so nobody is marked late or absent
+          // against someone else's schedule; the admin then picks the right faculty.
+          var sec = 0;
+          for (final s in faculty.values) {
             if (s.name.trim().isNotEmpty && s.name.trim().toLowerCase() == l.dept.toLowerCase()) sec = s.no;
           }
-          _students[l.studentId] = Student(
-              id: l.studentId, name: l.name, section: sec, notes: 'Added automatically from a device log');
-          _dirty.add('student:${l.studentId}');
-          newStudents++;
+          if (sec == 0) {
+            final empty = faculty.values.where((s) => s.name.trim().isEmpty).toList()..sort((a, b) => a.no.compareTo(b.no));
+            sec = empty.isEmpty ? 1 : empty.first.no;
+          }
+          _teachers[l.teacherId] = Teacher(
+              id: l.teacherId, name: l.name, faculty: sec, notes: 'Added automatically from a device log - set the faculty / subject');
+          _dirty.add('teacher:${l.teacherId}');
+          newTeachers++;
         } else if (existing.deleted) {
           existing.deleted = false;
           existing.updatedAt = DateTime.now();
-          _dirty.add('student:${l.studentId}');
-          newStudents++;
+          _dirty.add('teacher:${l.teacherId}');
+          newTeachers++;
         }
       } else {
         dup++;
@@ -412,15 +550,24 @@ class AppState extends ChangeNotifier {
     }
     await _persist.appendLogs(added);
     lastImport = DateTime.now();
-    final res = ImportResult(source, parsed.logs.length, added.length, dup, parsed.badLines, newStudents);
+    // A punch from the future can only mean the device clock is ahead of Philippine time.
+    if (latest != null && latest.isAfter(phNowTime.add(const Duration(minutes: 10)))) {
+      final ahead = latest.difference(phNowTime);
+      clockWarning = 'The newest punch (${fmtDateTime(latest)}) is ${fmtDuration(ahead.inMinutes)} ahead of Philippine time '
+          '(${fmtDateTime(phNowTime)}). The device clock looks wrong. Check it under Device sync > Device clock.';
+      _log('warn', clockWarning!);
+    } else if (parsed.logs.isNotEmpty) {
+      clockWarning = null;
+    }
+    final res = ImportResult(source, parsed.logs.length, added.length, dup, parsed.badLines, newTeachers);
     final extra = [
       if (dup > 0) '$dup already known',
-      if (newStudents > 0) '$newStudents new student${newStudents == 1 ? '' : 's'}',
+      if (newTeachers > 0) '$newTeachers new teacher${newTeachers == 1 ? '' : 's'}',
       if (parsed.badLines > 0) '${parsed.badLines} unreadable line${parsed.badLines == 1 ? '' : 's'}',
     ];
     _log(added.isEmpty ? 'info' : 'ok',
         'Imported ${added.length} new punch${added.length == 1 ? '' : 'es'} from $source${extra.isEmpty ? '' : ' (${extra.join(', ')})'}');
-    _changed(exportForm: newStudents > 0);
+    _changed(exportForm: newTeachers > 0);
     return res;
   }
 
@@ -461,29 +608,29 @@ class AppState extends ChangeNotifier {
     final bytes = await File(path).readAsBytes();
     final form = readDeviceForm(bytes);
     var changed = 0;
-    for (final s in form.students) {
-      final cur = _students[s.id];
+    for (final s in form.teachers) {
+      final cur = _teachers[s.id];
       if (cur == null || cur.deleted) {
-        _students[s.id] = s..updatedAt = DateTime.now();
-        _dirty.add('student:${s.id}');
+        _teachers[s.id] = s..updatedAt = DateTime.now();
+        _dirty.add('teacher:${s.id}');
         changed++;
-      } else if (cur.name != s.name || cur.section != s.section || cur.authority != s.authority) {
+      } else if (cur.name != s.name || cur.faculty != s.faculty || cur.authority != s.authority) {
         cur
           ..name = s.name
-          ..section = s.section
+          ..faculty = s.faculty
           ..authority = s.authority
           ..updatedAt = DateTime.now();
         if (s.schedule != null) cur.schedule = s.schedule;
-        _dirty.add('student:${s.id}');
+        _dirty.add('teacher:${s.id}');
         changed++;
       }
     }
     if (form.rulesFound) {
-      for (final sec in form.sections) {
-        final cur = sections[sec.no];
+      for (final sec in form.faculty) {
+        final cur = faculty[sec.no];
         if (cur == null || cur.name != sec.name || cur.week.join() != sec.week.join()) {
-          sections[sec.no] = sec..updatedAt = DateTime.now();
-          _dirty.add('section:${sec.no}');
+          faculty[sec.no] = sec..updatedAt = DateTime.now();
+          _dirty.add('faculty:${sec.no}');
           changed++;
         }
       }
@@ -507,6 +654,7 @@ class AppState extends ChangeNotifier {
           r.earlyAllow != rules.earlyAllow ||
           r.repeatMin != rules.repeatMin ||
           r.scheduleMode != rules.scheduleMode) {
+        r.clockOffsetMin = rules.clockOffsetMin; // the Excel file has no cell for it - keep ours
         rules = r..updatedAt = DateTime.now();
         _dirty.add('rules');
         changed++;
@@ -538,15 +686,15 @@ class AppState extends ChangeNotifier {
       }
       final out = writeDeviceForm(
         template,
-        students: students,
-        sections: sections.values.toList(),
+        teachers: teachers,
+        faculty: faculty.values.toList(),
         shifts: shifts.values.toList(),
         rules: rules,
       );
       await Persist.writeAtomic(f, out);
       _writtenSig[path] = await _sigOf(f);
       lastExport = DateTime.now();
-      if (!quiet) _log('ok', 'Wrote ${p.basename(path)} (${students.length} students) to ${p.dirname(path)}');
+      if (!quiet) _log('ok', 'Wrote ${p.basename(path)} (${teachers.length} teachers) to ${p.dirname(path)}');
       _saveSoon();
       notifyListeners();
       return true;
@@ -824,25 +972,29 @@ class AppState extends ChangeNotifier {
   Future<void> _flushDirty() async {
     if (_dirty.isEmpty) return;
     final keys = _dirty.toList();
-    final st = <Student>[];
-    final sc = <Section>[];
+    final st = <Teacher>[];
+    final sc = <Faculty>[];
     final sh = <Shift>[];
+    final lv = <LeaveRecord>[];
     Rules? ru;
     for (final k in keys) {
-      if (k.startsWith('student:')) {
-        final s = _students[int.parse(k.substring(8))];
+      if (k.startsWith('teacher:')) {
+        final s = _teachers[int.parse(k.substring(8))];
         if (s != null) st.add(s);
-      } else if (k.startsWith('section:')) {
-        final s = sections[int.parse(k.substring(8))];
+      } else if (k.startsWith('faculty:')) {
+        final s = faculty[int.parse(k.substring(8))];
         if (s != null) sc.add(s);
       } else if (k.startsWith('shift:')) {
         final s = shifts[int.parse(k.substring(6))];
         if (s != null) sh.add(s);
+      } else if (k.startsWith('leave:')) {
+        final s = _leaves[k.substring(6)];
+        if (s != null) lv.add(s);
       } else if (k == 'rules') {
         ru = rules;
       }
     }
-    await api.push(students: st, sections: sc, shifts: sh, rules: ru);
+    await api.push(teachers: st, faculty: sc, shifts: sh, leaves: lv, rules: ru);
     _dirty.removeAll(keys);
     _purgeTombstones();
     _saveSoon();
@@ -861,26 +1013,26 @@ class AppState extends ChangeNotifier {
   Future<void> _pullSnapshot() async {
     final snap = await api.snapshot();
     var changed = false;
-    for (final cs in snap.students) {
-      if (_dirty.contains('student:${cs.id}')) continue;
-      final cur = _students[cs.id];
+    for (final cs in snap.teachers) {
+      if (_dirty.contains('teacher:${cs.id}')) continue;
+      final cur = _teachers[cs.id];
       if (cur == null || cs.updatedAt.isAfter(cur.updatedAt)) {
         if (cs.deleted) {
           if (cur != null) {
-            _students.remove(cs.id);
+            _teachers.remove(cs.id);
             changed = true;
           }
         } else {
-          _students[cs.id] = cs;
+          _teachers[cs.id] = cs;
           changed = true;
         }
       }
     }
-    for (final cs in snap.sections) {
-      if (_dirty.contains('section:${cs.no}')) continue;
-      final cur = sections[cs.no];
+    for (final cs in snap.faculty) {
+      if (_dirty.contains('faculty:${cs.no}')) continue;
+      final cur = faculty[cs.no];
       if (cur == null || cs.updatedAt.isAfter(cur.updatedAt)) {
-        sections[cs.no] = cs;
+        faculty[cs.no] = cs;
         changed = true;
       }
     }
@@ -890,6 +1042,21 @@ class AppState extends ChangeNotifier {
       if (cur == null || cs.updatedAt.isAfter(cur.updatedAt)) {
         shifts[cs.no] = cs;
         changed = true;
+      }
+    }
+    for (final cl in snap.leaves) {
+      if (_dirty.contains('leave:${cl.id}')) continue;
+      final cur = _leaves[cl.id];
+      if (cur == null || cl.updatedAt.isAfter(cur.updatedAt)) {
+        if (cl.deleted) {
+          if (cur != null) {
+            _leaves.remove(cl.id);
+            changed = true;
+          }
+        } else {
+          _leaves[cl.id] = cl;
+          changed = true;
+        }
       }
     }
     final r = snap.rules;
@@ -928,25 +1095,14 @@ class AppState extends ChangeNotifier {
   // ============================================================ exports
 
   /// CSV of one day's attendance (opens fine in Excel).
-  String dayCsv(DateTime day) {
-    final sb = StringBuffer('\uFEFF');
-    sb.writeln('ID,Name,Section,Status,In,Out,Late (min),Early (min),Punches');
-    for (final r in book.day(day)) {
-      String q(String s) => '"${s.replaceAll('"', '""')}"';
-      sb.writeln([
-        r.student.id,
-        q(r.student.name),
-        q(sectionName(r.student.section)),
-        statusLabel(r.status),
-        r.in1 == null ? '' : fmtTime(r.in1!),
-        r.out1 == null && r.out2 == null ? '' : fmtTime((r.out2 ?? r.out1)!),
-        r.lateMin,
-        r.earlyMin,
-        r.punches,
-      ].join(','));
-    }
-    return sb.toString();
-  }
+  String dayCsv(DateTime day) => reports.dayCsv(book, day, facultyName);
+
+  /// One row per teacher with the month's totals.
+  String monthCsv(DateTime month) => reports.monthCsv(book, month, facultyName);
+
+  /// Daily Time Record of one teacher for a month.
+  String dtrCsv(Teacher t, DateTime month) =>
+      reports.dtrCsv(book, t, month, facultyName(t.faculty), rules.company);
 
   Future<String> writeText(String path, String text) async {
     await File(path).writeAsBytes(utf8.encode(text));

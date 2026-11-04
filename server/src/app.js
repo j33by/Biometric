@@ -37,20 +37,34 @@ const toIso = (v) => (v ? new Date(v).toISOString() : new Date().toISOString());
 const normTime = (t) => String(t).replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
 
 // ------------------------------------------------------------ mappers
-const studentOut = (r) => ({
-  id: r.id, name: r.name, section: r.section, authority: r.authority,
-  lrn: r.lrn, contact: r.contact, notes: r.notes, schedule: r.schedule,
-  updatedAt: r.updated_at, deleted: r.deleted,
+const teacherOut = (r) => ({
+  id: r.id, name: r.name, faculty: r.faculty, authority: r.authority,
+  teacherNo: r.teacher_no, position: r.position, contact: r.contact, notes: r.notes,
+  schedule: r.schedule, updatedAt: r.updated_at, deleted: r.deleted,
 });
-const sectionOut = (r) => ({ no: r.no, name: r.name, week: r.week, updatedAt: r.updated_at });
+const facultyOut = (r) => ({ no: r.no, name: r.name, week: r.week, updatedAt: r.updated_at });
 const shiftOut = (r) => ({
   no: r.no, in1: r.in1, out1: r.out1, in2: r.in2, out2: r.out2,
   otIn: r.ot_in, otOut: r.ot_out, updatedAt: r.updated_at,
 });
+const leaveOut = (r) => ({
+  id: r.id, teacherId: r.teacher_id, from: String(r.from_date).slice(0, 10),
+  to: String(r.to_date).slice(0, 10), type: r.type, note: r.note,
+  updatedAt: r.updated_at, deleted: r.deleted,
+});
 const rulesOut = (r) => ({
   company: r.company, lateAllow: r.late_allow, earlyAllow: r.early_allow,
-  repeatMin: r.repeat_min, scheduleMode: r.schedule_mode, updatedAt: r.updated_at,
+  repeatMin: r.repeat_min, scheduleMode: r.schedule_mode,
+  clockOffsetMin: r.clock_offset_min || 0, updatedAt: r.updated_at,
 });
+
+// Everything in this system is Philippine wall-clock time (UTC+8, no DST). The server
+// runs on UTC, so it must never format "now" with its own zone; it adds 8 hours itself.
+const PH_OFFSET_MS = 8 * 60 * 60 * 1000;
+const phNowString = () => new Date(Date.now() + PH_OFFSET_MS).toISOString().slice(0, 19).replace('T', ' ');
+const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const hm = (v) => (HM_RE.test(String(v || '')) ? String(v) : '');
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function createApp({ db, jwtSecret, corsOrigin }) {
   const app = express();
@@ -62,7 +76,7 @@ function createApp({ db, jwtSecret, corsOrigin }) {
 
   const api = express.Router();
 
-  api.get('/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+  api.get('/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString(), phTime: phNowString() }));
 
   // ------------------------------------------------------------- auth
   const loginLimiter = rateLimit({
@@ -170,19 +184,22 @@ function createApp({ db, jwtSecret, corsOrigin }) {
 
   // ------------------------------------------------------------- sync
   api.get('/sync/snapshot', auth, wrap(async (_req, res) => {
-    const [st, sc, sh, ru] = await Promise.all([
-      db.from('students').select('*').order('id').limit(20000),
-      db.from('sections').select('*').order('no'),
+    const [te, fa, sh, lv, ru] = await Promise.all([
+      db.from('teachers').select('*').order('id').limit(20000),
+      db.from('faculty').select('*').order('no'),
       db.from('shifts').select('*').order('no'),
+      db.from('leaves').select('*').order('from_date').limit(20000),
       db.from('rules').select('*').eq('id', 1).maybeSingle(),
     ]);
-    check(st, 'students'); check(sc, 'sections'); check(sh, 'shifts'); check(ru, 'rules');
+    check(te, 'teachers'); check(fa, 'faculty'); check(sh, 'shifts'); check(lv, 'leaves'); check(ru, 'rules');
     res.json({
-      students: st.data.map(studentOut),
-      sections: sc.data.map(sectionOut),
+      teachers: te.data.map(teacherOut),
+      faculty: fa.data.map(facultyOut),
       shifts: sh.data.map(shiftOut),
+      leaves: lv.data.map(leaveOut),
       rules: ru.data ? rulesOut(ru.data) : null,
       serverTime: new Date().toISOString(),
+      phTime: phNowString(),
     });
   }));
 
@@ -201,37 +218,53 @@ function createApp({ db, jwtSecret, corsOrigin }) {
 
   api.post('/sync/push', auth, needWrite, wrap(async (req, res) => {
     const b = req.body || {};
-    const students = (b.students || []).map((s) => {
+    const teachers = (b.teachers || []).map((s) => {
       const id = Number(s.id);
-      if (!Number.isInteger(id) || id < 1) throw httpError(400, 'Invalid student id');
+      if (!Number.isInteger(id) || id < 1) throw httpError(400, 'Invalid teacher id');
       return {
         id, name: String(s.name || '').slice(0, 120),
-        section: Math.min(16, Math.max(1, Number(s.section) || 1)),
+        faculty: Math.min(16, Math.max(1, Number(s.faculty) || 1)),
         authority: Number(s.authority) === 1 ? 1 : 0,
-        lrn: String(s.lrn || '').slice(0, 40), contact: String(s.contact || '').slice(0, 80),
+        teacher_no: String(s.teacherNo || '').slice(0, 40),
+        position: String(s.position || '').slice(0, 80),
+        contact: String(s.contact || '').slice(0, 80),
         notes: String(s.notes || '').slice(0, 500),
         schedule: Array.isArray(s.schedule) ? s.schedule : null,
         deleted: !!s.deleted, updated_at: toIso(s.updatedAt),
       };
     });
-    const sections = (b.sections || []).map((s) => ({
+    const faculty = (b.faculty || []).map((s) => ({
       no: Number(s.no), name: String(s.name || '').slice(0, 60),
-      week: Array.isArray(s.week) && s.week.length === 7 ? s.week.map(Number) : [1, 1, 1, 1, 1, 1, 1],
+      week: Array.isArray(s.week) && s.week.length === 7 ? s.week.map((x) => Math.min(10, Math.max(0, Number(x) || 0))) : [0, 1, 1, 1, 1, 1, 0],
       updated_at: toIso(s.updatedAt),
     })).filter((s) => s.no >= 1 && s.no <= 16);
+    // Shift times are Philippine wall-clock "HH:mm" (24-hour). Anything else is stored empty.
     const shifts = (b.shifts || []).map((s) => ({
-      no: Number(s.no), in1: s.in1 || '', out1: s.out1 || '', in2: s.in2 || '', out2: s.out2 || '',
-      ot_in: s.otIn || '', ot_out: s.otOut || '', updated_at: toIso(s.updatedAt),
+      no: Number(s.no), in1: hm(s.in1), out1: hm(s.out1), in2: hm(s.in2), out2: hm(s.out2),
+      ot_in: hm(s.otIn), ot_out: hm(s.otOut), updated_at: toIso(s.updatedAt),
     })).filter((s) => s.no >= 1 && s.no <= 10);
-    await lww('students', 'id', students);
-    await lww('sections', 'no', sections);
+    const leaves = (b.leaves || []).map((l) => {
+      const tid = Number(l.teacherId);
+      if (!Number.isInteger(tid) || tid < 1) throw httpError(400, 'Invalid teacher id in leave');
+      if (!DATE_RE.test(String(l.from)) || !DATE_RE.test(String(l.to))) throw httpError(400, 'Invalid leave date');
+      return {
+        id: String(l.id || '').slice(0, 60), teacher_id: tid,
+        from_date: String(l.from), to_date: String(l.to) < String(l.from) ? String(l.from) : String(l.to),
+        type: String(l.type || 'Other').slice(0, 40), note: String(l.note || '').slice(0, 300),
+        deleted: !!l.deleted, updated_at: toIso(l.updatedAt),
+      };
+    }).filter((l) => l.id);
+    await lww('teachers', 'id', teachers);
+    await lww('faculty', 'no', faculty);
     await lww('shifts', 'no', shifts);
+    await lww('leaves', 'id', leaves);
     if (b.rules) {
       const r = b.rules;
       const row = {
         id: 1, company: String(r.company || '').slice(0, 80),
         late_allow: Number(r.lateAllow) || 0, early_allow: Number(r.earlyAllow) || 0,
         repeat_min: Number(r.repeatMin) || 3, schedule_mode: Number(r.scheduleMode) || 0,
+        clock_offset_min: Math.max(-1440, Math.min(1440, Math.round(Number(r.clockOffsetMin) || 0))),
         updated_at: toIso(r.updatedAt),
       };
       const { data } = await db.from('rules').select('updated_at').eq('id', 1).maybeSingle();
@@ -249,10 +282,10 @@ function createApp({ db, jwtSecret, corsOrigin }) {
     if (list.length > 5000) throw httpError(413, 'Send at most 5000 punches per request');
     const rows = [];
     for (const l of list) {
-      const id = Number(l.studentId);
+      const id = Number(l.teacherId);
       if (!Number.isInteger(id) || id < 1 || !TIME_RE.test(String(l.time))) continue;
       rows.push({
-        student_id: id, name: String(l.name || '').slice(0, 120), dept: String(l.dept || '').slice(0, 60),
+        teacher_id: id, name: String(l.name || '').slice(0, 120), dept: String(l.dept || '').slice(0, 60),
         punched_at: normTime(l.time), device_id: Number(l.deviceId) || 1,
       });
     }
@@ -260,7 +293,7 @@ function createApp({ db, jwtSecret, corsOrigin }) {
     for (let i = 0; i < rows.length; i += 1000) {
       const chunk = rows.slice(i, i + 1000);
       const { data, error } = await db.from('attendance_logs')
-        .upsert(chunk, { onConflict: 'student_id,punched_at,device_id', ignoreDuplicates: true })
+        .upsert(chunk, { onConflict: 'teacher_id,punched_at,device_id', ignoreDuplicates: true })
         .select('id');
       if (error) throw httpError(500, error.message);
       inserted += data ? data.length : 0;
@@ -272,14 +305,14 @@ function createApp({ db, jwtSecret, corsOrigin }) {
     const after = Math.max(0, Number(req.query.after) || 0);
     const limit = Math.min(10000, Math.max(1, Number(req.query.limit) || 5000));
     const { data, error } = await db.from('attendance_logs')
-      .select('id, student_id, name, dept, punched_at, device_id')
+      .select('id, teacher_id, name, dept, punched_at, device_id')
       .gt('id', after).order('id').limit(limit + 1);
     if (error) throw httpError(500, error.message);
     const hasMore = data.length > limit;
     const page = hasMore ? data.slice(0, limit) : data;
     res.json({
       logs: page.map((r) => ({
-        studentId: r.student_id, name: r.name, dept: r.dept,
+        teacherId: r.teacher_id, name: r.name, dept: r.dept,
         time: normTime(r.punched_at), deviceId: r.device_id,
       })),
       cursor: page.length ? page[page.length - 1].id : after,
@@ -288,7 +321,7 @@ function createApp({ db, jwtSecret, corsOrigin }) {
   }));
 
   app.use('/api', api);
-  app.get('/', (_req, res) => res.json({ service: 'biometric-dashboard-server', ok: true }));
+  app.get('/', (_req, res) => res.json({ service: 'cnhs-teacher-attendance-server', ok: true }));
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
@@ -300,4 +333,4 @@ function createApp({ db, jwtSecret, corsOrigin }) {
   return app;
 }
 
-module.exports = { createApp };
+module.exports = { createApp, phNowString };

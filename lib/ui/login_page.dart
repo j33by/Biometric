@@ -55,10 +55,12 @@ class _LoginPageState extends State<LoginPage> {
             color: C.side,
             padding: const EdgeInsets.all(48),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
-              const Text('Attendance\nConsole', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w300, height: 1.1)),
+              ClipOval(child: Image.asset('assets/images/cnhs_logo.png', width: 84, height: 84, fit: BoxFit.cover)),
+              const SizedBox(height: 22),
+              const Text('Teachers\nAttendance', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w300, height: 1.1)),
               const SizedBox(height: 14),
               const Text(
-                'Teachers attendance from the biometric device,\nkept in step with Excel, USB and the cloud.',
+                'Calape National High School\nTeacher log-ins and log-outs from the biometric device,\nkept in step with Excel, USB and the cloud.\nAll times are Philippine time.',
                 style: TextStyle(color: C.sideText, fontSize: 14, height: 1.5),
               ),
             ]),

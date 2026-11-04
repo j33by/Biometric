@@ -1,0 +1,27 @@
+name: cnhs_teacher_app
+description: CNHS Teacher App - teachers link their account to their biometric record and see their schedule, log-ins and log-outs, attendance and notices. Admins see who is in, edit shift times and approve links.
+publish_to: none
+version: 2.0.0
+
+environment:
+  sdk: ^3.9.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.9.0
+  intl: ^0.20.2
+  flutter_local_notifications: ^19.0.0
+  workmanager: ^0.10.10
+  shared_preferences: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ">=5.0.0 <7.0.0"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/cnhs_logo.png

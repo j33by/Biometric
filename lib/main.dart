@@ -51,7 +51,7 @@ class _BiometricAppState extends State<BiometricApp> {
     return AppScope(
       state: _state,
       child: MaterialApp(
-        title: 'Attendance Console',
+        title: 'CNHS Teachers Attendance',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         home: const _Gate(),

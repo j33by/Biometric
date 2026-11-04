@@ -1,11 +1,12 @@
 {
-  "name": "biometric-dashboard-server",
-  "version": "1.0.0",
+  "name": "cnhs-teacher-attendance-server",
+  "version": "2.0.0",
   "private": true,
-  "description": "API between the Flutter dashboard and Supabase",
+  "description": "API between the teacher-attendance dashboard and Supabase",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "test": "node test/api.test.js",
     "check": "node --check src/index.js && node --check src/app.js"
   },
   "engines": { "node": ">=18" },

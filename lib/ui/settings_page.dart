@@ -69,7 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'How your data is kept',
         child: Text(
           'Everything is saved on this computer first (so the dashboard works with no internet), mirrored to Supabase when the server is reachable, and written to Employee Form.xls for the device.\n'
-          'Punch records are identified by student ID + date/time + device, so importing the same file twice – or from two computers – never creates duplicates.',
+          'Punch records are identified by teacher ID + date/time + device, so importing the same file twice – or from two computers – never creates duplicates.',
           style: TextStyle(color: C.muted, height: 1.5),
         ),
       ),

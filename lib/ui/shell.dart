@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../core/dates.dart';
+import '../core/ph_time.dart';
 import '../data/app_state.dart';
 import '../main.dart';
 import 'admins_page.dart';
 import 'attendance_page.dart';
 import 'dashboard_page.dart';
-import 'sections_page.dart';
+import 'faculty_page.dart';
+import 'leaves_page.dart';
+import 'nav.dart';
 import 'settings_page.dart';
-import 'students_page.dart';
+import 'teachers_page.dart';
 import 'sync_page.dart';
 import 'theme.dart';
+import 'widgets.dart';
 
 class _Nav {
   final String label;
@@ -21,9 +25,10 @@ class _Nav {
 
 const _navs = <_Nav>[
   _Nav('Dashboard', Icons.dashboard_outlined, 'Overview'),
-  _Nav('Teachers', Icons.groups_outlined, 'Records'),
+  _Nav('Teachers', Icons.badge_outlined, 'Records'),
   _Nav('Attendance', Icons.fact_check_outlined),
-  _Nav('Subjects & shifts', Icons.schedule_outlined, 'Setup'),
+  _Nav('Leaves', Icons.event_busy_outlined),
+  _Nav('Faculty & shifts', Icons.schedule_outlined, 'Setup'),
   _Nav('Device sync', Icons.usb_rounded),
   _Nav('Administrators', Icons.admin_panel_settings_outlined, 'System'),
   _Nav('Settings', Icons.tune_outlined),
@@ -42,17 +47,19 @@ class _ShellState extends State<Shell> {
 
   Widget _page() {
     switch (_index) {
-      case 0:
+      case kNavDashboard:
         return DashboardPage(onNavigate: go);
-      case 1:
-        return const StudentsPage();
-      case 2:
+      case kNavTeachers:
+        return const TeachersPage();
+      case kNavAttendance:
         return const AttendancePage();
-      case 3:
-        return const SectionsPage();
-      case 4:
+      case kNavLeaves:
+        return const LeavesPage();
+      case kNavFaculty:
+        return const FacultyPage();
+      case kNavSync:
         return const SyncPage();
-      case 5:
+      case kNavAdmins:
         return const AdminsPage();
       default:
         return const SettingsPage();
@@ -94,17 +101,23 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.app;
-    final school = app.rules.company.trim().isEmpty ? 'Attendance Console' : app.rules.company.trim().toUpperCase();
+    final school = app.rules.company.trim().isEmpty ? 'Teacher Attendance' : app.rules.company.trim().toUpperCase();
     return Container(
       width: 224,
       color: C.side,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(
           padding: const EdgeInsets.fromLTRB(20, 22, 16, 18),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(school, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15, letterSpacing: 0.4)),
-            const SizedBox(height: 2),
-            const Text('Biometric attendance', style: TextStyle(color: C.sideText, fontSize: 12)),
+          child: Row(children: [
+            ClipOval(child: Image.asset('assets/images/cnhs_logo.png', width: 40, height: 40, fit: BoxFit.cover)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(school, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5, letterSpacing: 0.3, height: 1.2)),
+                const SizedBox(height: 2),
+                const Text('Teachers attendance', style: TextStyle(color: C.sideText, fontSize: 11.5)),
+              ]),
+            ),
           ]),
         ),
         for (var i = 0; i < _navs.length; i++) ...[
@@ -113,7 +126,7 @@ class _Sidebar extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
               child: Text(_navs[i].group!.toUpperCase(), style: const TextStyle(color: Color(0xFF6F7F8F), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
             ),
-          if (!(i == 5 && !(app.admin?.isSuper ?? false))) _item(i),
+          if (!(i == kNavAdmins && !(app.admin?.isSuper ?? false))) _item(i),
         ],
         const Spacer(),
         Container(
@@ -189,7 +202,12 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 28),
       decoration: const BoxDecoration(color: C.surface, border: Border(bottom: BorderSide(color: C.border))),
       child: Row(children: [
-        Text(fmtDateLong(DateTime.now()), style: const TextStyle(color: C.muted, fontSize: 12.5)),
+        PhClock(showDate: true, style: const TextStyle(color: C.muted, fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()])),
+        if (localZoneOffsetFromPhHours() != 0)
+          Tooltip(
+            message: 'This computer is not set to Philippine time. The app ignores that and always uses UTC+8, so shifts and "today" still match the device.',
+            child: const Padding(padding: EdgeInsets.only(left: 10), child: Icon(Icons.public, size: 15, color: C.warn)),
+          ),
         const Spacer(),
         if (usb.isNotEmpty)
           Padding(

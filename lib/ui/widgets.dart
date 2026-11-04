@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../core/attendance.dart';
+import '../core/dates.dart';
+import '../core/models.dart';
+import '../core/ph_time.dart';
 import 'theme.dart';
 
 /// Flat bordered panel with an optional title row.
@@ -106,7 +110,9 @@ class Tag extends StatelessWidget {
         return Tag(statusLabel(s), fg: C.warn, bg: C.warnSoft);
       case DayStatus.absent:
         return Tag(statusLabel(s), fg: C.bad, bg: C.badSoft);
-      case DayStatus.holiday:
+      case DayStatus.leave:
+        return Tag(statusLabel(s), fg: C.accent, bg: C.accentSoft);
+      case DayStatus.dayOff:
       case DayStatus.noData:
         return Tag(statusLabel(s), fg: C.muted, bg: C.surfaceAlt);
     }
@@ -382,3 +388,75 @@ class THead extends StatelessWidget {
 Widget _cell(Widget child, double? w) => w == null ? Expanded(child: child) : SizedBox(width: w, child: child);
 
 Widget tcell(Widget child, double? w) => _cell(child, w);
+
+/// A live Philippine-time clock (ticks every second). Not the computer's own zone.
+class PhClock extends StatefulWidget {
+  final TextStyle? style;
+  final bool showSeconds;
+  final bool showDate;
+  const PhClock({super.key, this.style, this.showSeconds = true, this.showDate = false});
+  @override
+  State<PhClock> createState() => _PhClockState();
+}
+
+class _PhClockState extends State<PhClock> {
+  Timer? _t;
+  DateTime _now = phNow();
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _now = phNow());
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h12 = _now.hour % 12 == 0 ? 12 : _now.hour % 12;
+    final time = '$h12:${two(_now.minute)}${widget.showSeconds ? ':${two(_now.second)}' : ''} ${_now.hour >= 12 ? 'PM' : 'AM'}';
+    final text = widget.showDate ? '${fmtDateLong(_now)}  ·  $time PHT' : '$time PHT';
+    return Text(text, style: widget.style ?? const TextStyle(fontFeatures: [FontFeature.tabularFigures()]));
+  }
+}
+
+/// One faculty slot's week as log-in / log-out times (Mon..Fri; Sun/Sat only when used).
+class WeekTimes extends StatelessWidget {
+  final Faculty faculty;
+  final Map<int, Shift> shifts;
+  final double fontSize;
+  const WeekTimes({super.key, required this.faculty, required this.shifts, this.fontSize = 11.5});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = <int>[
+      if (faculty.week[0] != 0) 0,
+      1, 2, 3, 4, 5,
+      if (faculty.week[6] != 0) 6,
+    ];
+    return Row(children: [
+      for (final d in days)
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 4),
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 5),
+            decoration: BoxDecoration(color: faculty.week[d] == 0 ? C.surfaceAlt : C.accentSoft, borderRadius: BorderRadius.circular(2)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(kWeekdayShort[d], style: const TextStyle(fontSize: 9.5, color: C.muted, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 1),
+              Text(
+                faculty.week[d] == 0 ? '–' : (shifts[faculty.week[d]]?.label ?? 'Shift ${faculty.week[d]}'),
+                style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: faculty.week[d] == 0 ? C.faint : C.ink, height: 1.2),
+              ),
+            ]),
+          ),
+        ),
+    ]);
+  }
+}

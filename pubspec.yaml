@@ -1,7 +1,7 @@
 name: attendance_console
-description: Desktop dashboard for a biometric attendance device (USB / Excel / Supabase).
+description: Desktop dashboard for teacher attendance on a biometric device (USB / Excel / Supabase).
 publish_to: none
-version: 1.0.4
+version: 2.0.0
 
 environment:
   sdk: ^3.9.0
@@ -23,3 +23,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/templates/Employee_Form.xls
+    - assets/images/cnhs_logo.png

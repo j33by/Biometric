@@ -1,6 +1,6 @@
 analyzer:
   exclude:
-    - student_app/**
+    - teacher_app/**
   errors:
     invalid_use_of_protected_member: ignore
     deprecated_member_use: ignore

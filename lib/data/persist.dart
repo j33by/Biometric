@@ -1,6 +1,6 @@
 // On-disk storage for the app's working database.
 //
-//   db.json     students, sections, shifts, rules, settings, sync bookkeeping
+//   db.json     teachers, faculty, shifts, rules, settings, sync bookkeeping
 //   logs.jsonl  one punch per line, append-only (fast to extend, cheap to load)
 //
 // Writes are atomic (temp file + rename) so a crash or a pulled USB stick

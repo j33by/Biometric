@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../core/dates.dart';
 import '../core/models.dart';
 
 class ApiException implements Exception {
@@ -20,11 +21,12 @@ class ApiException implements Exception {
 }
 
 class SnapshotData {
-  final List<Student> students;
-  final List<Section> sections;
+  final List<Teacher> teachers;
+  final List<Faculty> faculty;
   final List<Shift> shifts;
+  final List<LeaveRecord> leaves;
   final Rules? rules;
-  SnapshotData(this.students, this.sections, this.shifts, this.rules);
+  SnapshotData(this.teachers, this.faculty, this.shifts, this.leaves, this.rules);
 }
 
 class LogPage {
@@ -102,6 +104,18 @@ class ApiClient {
     return AdminUser.fromJson(j['admin'] as Map<String, dynamic>);
   }
 
+  /// Philippine time according to the server (UTC+8, computed from its UTC clock),
+  /// or null if unreachable. Used to catch a computer whose clock or zone is wrong.
+  Future<DateTime?> serverPhTime() async {
+    try {
+      final j = await _send('GET', '/health', timeout: const Duration(seconds: 75));
+      final s = (j is Map ? j['phTime'] : null) as String?;
+      return s == null ? null : parseDateTime(s);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> health() async {
     try {
       await _send('GET', '/health', timeout: const Duration(seconds: 75));
@@ -116,24 +130,27 @@ class ApiClient {
   Future<SnapshotData> snapshot() async {
     final j = await _send('GET', '/sync/snapshot', timeout: const Duration(seconds: 60));
     return SnapshotData(
-      ((j['students'] ?? []) as List).map((e) => Student.fromJson(e as Map<String, dynamic>)).toList(),
-      ((j['sections'] ?? []) as List).map((e) => Section.fromJson(e as Map<String, dynamic>)).toList(),
+      ((j['teachers'] ?? []) as List).map((e) => Teacher.fromJson(e as Map<String, dynamic>)).toList(),
+      ((j['faculty'] ?? []) as List).map((e) => Faculty.fromJson(e as Map<String, dynamic>)).toList(),
       ((j['shifts'] ?? []) as List).map((e) => Shift.fromJson(e as Map<String, dynamic>)).toList(),
+      ((j['leaves'] ?? []) as List).map((e) => LeaveRecord.fromJson(e as Map<String, dynamic>)).toList(),
       j['rules'] == null ? null : Rules.fromJson(j['rules'] as Map<String, dynamic>),
     );
   }
 
   Future<void> push({
-    List<Student> students = const [],
-    List<Section> sections = const [],
+    List<Teacher> teachers = const [],
+    List<Faculty> faculty = const [],
     List<Shift> shifts = const [],
+    List<LeaveRecord> leaves = const [],
     Rules? rules,
   }) async {
     await _send('POST', '/sync/push',
         body: {
-          'students': students.map((e) => e.toJson()).toList(),
-          'sections': sections.map((e) => e.toJson()).toList(),
+          'teachers': teachers.map((e) => e.toJson()).toList(),
+          'faculty': faculty.map((e) => e.toJson()).toList(),
           'shifts': shifts.map((e) => e.toJson()).toList(),
+          'leaves': leaves.map((e) => e.toJson()).toList(),
           if (rules != null) 'rules': rules.toJson(),
         },
         timeout: const Duration(seconds: 60));
@@ -146,7 +163,7 @@ class ApiClient {
         body: {
           'logs': logs
               .map((l) => {
-                    'studentId': l.studentId,
+                    'teacherId': l.teacherId,
                     'name': l.name,
                     'dept': l.dept,
                     'time': l.toJson()['t'],
@@ -166,7 +183,7 @@ class ApiClient {
     for (final r in rows) {
       final m = r as Map<String, dynamic>;
       logs.add(PunchLog.fromJson({
-        'i': m['studentId'],
+        'i': m['teacherId'],
         'n': m['name'],
         'd': m['dept'],
         't': m['time'],
