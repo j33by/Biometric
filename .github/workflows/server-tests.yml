@@ -20,4 +20,4 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
-      - run: node test/api.test.js
+      - run: npm test

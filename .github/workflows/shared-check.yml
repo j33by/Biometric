@@ -1,0 +1,14 @@
+name: Shared code check
+
+on:
+  push:
+    paths: ['lib/core/schedule_calc.dart', 'teacher_app/lib/schedule_calc.dart', 'tools/check_shared.sh']
+  pull_request:
+    paths: ['lib/core/schedule_calc.dart', 'teacher_app/lib/schedule_calc.dart', 'tools/check_shared.sh']
+
+jobs:
+  same:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/check_shared.sh
