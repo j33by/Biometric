@@ -1,3 +1,4 @@
+-- NOTE: superseded by setup_all.sql (one safe, re-runnable file). Kept for reference; do not run it on top of setup_all.sql.
 -- CNHS Teacher App: run ONCE in Supabase > SQL Editor, AFTER schema.sql
 -- (or after migrate_from_student_version.sql on an older project).
 -- Teachers and admins both sign in with Supabase Auth. Everything is protected by

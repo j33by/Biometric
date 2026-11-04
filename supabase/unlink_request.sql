@@ -1,3 +1,4 @@
+-- NOTE: superseded by setup_all.sql (one safe, re-runnable file). Kept for reference; do not run it on top of setup_all.sql.
 -- Run ONCE in Supabase > SQL Editor, AFTER teacher_app.sql.
 -- Adds "request unlink" for teachers.
 

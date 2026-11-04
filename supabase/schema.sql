@@ -1,3 +1,4 @@
+-- NOTE: superseded by setup_all.sql (one safe, re-runnable file). Kept for reference; do not run it on top of setup_all.sql.
 -- CNHS Teachers Attendance: run once in Supabase: SQL Editor -> New query -> paste -> Run.
 -- The Render server talks to these tables with the service-role key, so
 -- row level security is switched on with NO public policies here: the anon key

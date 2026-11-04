@@ -75,7 +75,7 @@ class Repo {
 
   /// The teacher's own schedule: faculty slot + shifts + rules + leaves.
   static Future<MySchedule> mySchedule(Link l) async {
-    final results = await Future.wait([
+    final results = await Future.wait<dynamic>(<Future<dynamic>>[
       sb.from('faculty').select(),
       sb.from('shifts').select(),
       sb.from('rules').select().eq('id', 1).maybeSingle(),
@@ -158,7 +158,7 @@ class Repo {
   /// Everything the admin "Today" board needs for one date (Philippine time).
   static Future<AdminDay> adminDay(DateTime day) async {
     final d = dayOf(day);
-    final results = await Future.wait([
+    final results = await Future.wait<dynamic>(<Future<dynamic>>[
       sb.from('teachers').select('id, name, faculty, position').eq('deleted', false).order('id').limit(500),
       sb.from('faculty').select(),
       sb.from('shifts').select(),

@@ -266,7 +266,7 @@ class _TeacherPickerState extends State<TeacherPicker> {
                       ? const Empty(Icons.person_search, 'No match. Check the spelling, or ask the school office to add you.')
                       : ListView.separated(
                           itemCount: rows.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (_, _) => const Divider(height: 1),
                           itemBuilder: (c, i) => ListTile(
                             leading: CircleAvatar(child: Text(rows[i].name.isEmpty ? '?' : rows[i].name[0].toUpperCase())),
                             title: Text(rows[i].name),

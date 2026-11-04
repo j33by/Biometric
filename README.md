@@ -71,10 +71,11 @@ It is loaded automatically on first run, or with **Faculty & shifts → Load G12
 * **Administrators** – cloud accounts (superadmin / admin / viewer).
 
 ## Setup
-1. **Supabase**: SQL Editor → run `supabase/schema.sql` (new project) then `supabase/teacher_app.sql`
-   and `supabase/unlink_request.sql`. Optional: `supabase/seed_cnhs_g12_abm.sql` pre-loads the program above.
-   *Upgrading a project that already ran the student version?* Run `supabase/migrate_from_student_version.sql`
-   first, then `teacher_app.sql` again.
+1. **Supabase**: SQL Editor → paste **`supabase/setup_all.sql`** → Run. That one file is everything. It works on a
+   new project, on a project that already has the old student version, and on one where an earlier attempt
+   stopped half way, and it is safe to run again. (`schema.sql`, `teacher_app.sql`, `unlink_request.sql` and
+   `migrate_from_student_version.sql` are the same thing in pieces, kept for reference. Do not run them on top of it.)
+   Optional: `supabase/seed_cnhs_g12_abm.sql` pre-loads the program above. Then make yourself admin (last lines of `setup_all.sql`).
 2. **Render**: New → Blueprint → this repo; fill `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ADMIN_EMAIL`,
    `ADMIN_PASSWORD`.
 3. **Desktop app**: GitHub Actions → *Build Windows app* → download `AttendanceConsole-windows.zip`

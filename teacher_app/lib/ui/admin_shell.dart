@@ -624,10 +624,12 @@ class _ShiftDialogState extends State<_ShiftDialog> {
       await Repo.saveShift(widget.shift.no, v['in1']!, v['out1']!, v['in2']!, v['out2']!, v['otIn']!, v['otOut']!);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() {
-        _busy = false;
-        _error = errText(e);
-      });
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = errText(e);
+        });
+      }
     }
   }
 

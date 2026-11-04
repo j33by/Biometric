@@ -36,7 +36,7 @@ Every minute while the app is open, roughly every 15 minutes in the background (
 reminder fires once a day. Not instant; battery saver can delay it.
 
 ## Setup
-1. Supabase SQL: `schema.sql`, then `teacher_app.sql`, then `unlink_request.sql` (see the root README).
+1. Supabase SQL: run `supabase/setup_all.sql` once (see the root README).
 2. Authentication → enable *Email* and *Google*; add the redirect URL `io.supabase.cnhs://login-callback/`.
 3. `flutter create --platforms=android,ios,web .` then `flutter pub get` (CI does this and patches the Android
    manifest / Gradle for you).

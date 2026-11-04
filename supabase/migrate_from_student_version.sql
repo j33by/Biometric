@@ -1,3 +1,4 @@
+-- NOTE: superseded by setup_all.sql (one safe, re-runnable file). Kept for reference; do not run it on top of setup_all.sql.
 -- ONLY for a Supabase project that already ran the old STUDENT version of this system.
 -- (A brand-new project skips this file: schema.sql + teacher_app.sql are enough.)
 -- Run ONCE in the SQL Editor, BEFORE teacher_app.sql. It renames in place, so nothing

@@ -18,6 +18,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'attendance.dart';
 import 'config.dart';
+import 'models.dart';
 import 'ph.dart';
 import 'repo.dart';
 
